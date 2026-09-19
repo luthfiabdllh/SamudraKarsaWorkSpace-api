@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { and, eq, isNull, type SQL } from 'drizzle-orm';
+import { and, eq, type SQL } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import { AuditService } from '../audit/audit.service';
@@ -43,7 +43,8 @@ export class DuesService {
     this.assertAccess(actor);
 
     const conditions: SQL[] = [];
-    if (query.periodId) conditions.push(eq(memberDues.periodId, query.periodId));
+    if (query.periodId)
+      conditions.push(eq(memberDues.periodId, query.periodId));
     if (query.status) conditions.push(eq(memberDues.status, query.status));
 
     return this.db
@@ -191,7 +192,11 @@ export class DuesService {
 
     const rows = await this.db
       .update(memberPayments)
-      .set({ verified: true, verifiedBy: context.actorId, updatedAt: new Date() })
+      .set({
+        verified: true,
+        verifiedBy: context.actorId,
+        updatedAt: new Date(),
+      })
       .where(
         and(
           eq(memberPayments.id, paymentId),
@@ -251,7 +256,7 @@ export class DuesService {
       action: 'payment.deleted',
       entityType: 'payment',
       entityId: paymentId,
-      beforeData: row,
+      beforeData: row as Record<string, unknown>,
     });
   }
 

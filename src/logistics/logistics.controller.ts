@@ -62,7 +62,12 @@ export class LogisticsController {
     @Body() dto: UpdateShipmentDto,
     @Req() req: Request,
   ) {
-    return this.logistics.updateShipment(id, dto, this.actor(req), this.context(req));
+    return this.logistics.updateShipment(
+      id,
+      dto,
+      this.actor(req),
+      this.context(req),
+    );
   }
 
   @Post('shipments/:id/transitions')
@@ -73,7 +78,12 @@ export class LogisticsController {
     @Body() dto: TransitionShipmentDto,
     @Req() req: Request,
   ) {
-    return this.logistics.transitionShipment(id, dto, this.actor(req), this.context(req));
+    return this.logistics.transitionShipment(
+      id,
+      dto,
+      this.actor(req),
+      this.context(req),
+    );
   }
 
   @Delete('shipments/:id')
@@ -112,7 +122,12 @@ export class LogisticsController {
     @Body() dto: UpdateTripDto,
     @Req() req: Request,
   ) {
-    return this.logistics.updateTrip(id, dto, this.actor(req), this.context(req));
+    return this.logistics.updateTrip(
+      id,
+      dto,
+      this.actor(req),
+      this.context(req),
+    );
   }
 
   @Post('trips/:id/transitions')
@@ -123,7 +138,12 @@ export class LogisticsController {
     @Body() dto: TransitionTripDto,
     @Req() req: Request,
   ) {
-    return this.logistics.transitionTrip(id, dto, this.actor(req), this.context(req));
+    return this.logistics.transitionTrip(
+      id,
+      dto,
+      this.actor(req),
+      this.context(req),
+    );
   }
 
   @Delete('trips/:id')

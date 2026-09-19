@@ -75,7 +75,13 @@ export class FinanceController {
     @Headers('if-match') ifMatch: string | undefined,
     @Req() req: Request,
   ) {
-    return this.finance.updateBudget(id, dto, ifMatch ?? null, this.actor(req), this.context(req));
+    return this.finance.updateBudget(
+      id,
+      dto,
+      ifMatch ?? null,
+      this.actor(req),
+      this.context(req),
+    );
   }
 
   @Post('budgets/:id/transitions')
@@ -86,7 +92,12 @@ export class FinanceController {
     @Body() dto: TransitionBudgetDto,
     @Req() req: Request,
   ) {
-    return this.finance.transitionBudget(id, dto, this.actor(req), this.context(req));
+    return this.finance.transitionBudget(
+      id,
+      dto,
+      this.actor(req),
+      this.context(req),
+    );
   }
 
   @Delete('budgets/:id')
@@ -105,7 +116,12 @@ export class FinanceController {
     @Body() dto: CreateBudgetItemDto,
     @Req() req: Request,
   ) {
-    return this.finance.addBudgetItem(id, dto, this.actor(req), this.context(req));
+    return this.finance.addBudgetItem(
+      id,
+      dto,
+      this.actor(req),
+      this.context(req),
+    );
   }
 
   @Patch('budgets/:id/items/:itemId')
@@ -116,7 +132,13 @@ export class FinanceController {
     @Body() dto: UpdateBudgetItemDto,
     @Req() req: Request,
   ) {
-    return this.finance.updateBudgetItem(id, itemId, dto, this.actor(req), this.context(req));
+    return this.finance.updateBudgetItem(
+      id,
+      itemId,
+      dto,
+      this.actor(req),
+      this.context(req),
+    );
   }
 
   @Delete('budgets/:id/items/:itemId')
@@ -127,14 +149,22 @@ export class FinanceController {
     @Param('itemId') itemId: string,
     @Req() req: Request,
   ) {
-    return this.finance.removeBudgetItem(id, itemId, this.actor(req), this.context(req));
+    return this.finance.removeBudgetItem(
+      id,
+      itemId,
+      this.actor(req),
+      this.context(req),
+    );
   }
 
   // ─── Transaksi ─────────────────────────────────────────────────────────────
 
   @Get('transactions')
   @Policy('finance:read')
-  listTransactions(@Query() query: ListTransactionsQueryDto, @Req() req: Request) {
+  listTransactions(
+    @Query() query: ListTransactionsQueryDto,
+    @Req() req: Request,
+  ) {
     return this.finance.listTransactions(query, this.actor(req));
   }
 
@@ -153,7 +183,11 @@ export class FinanceController {
   @Post('transactions')
   @Policy('finance:write')
   createTransaction(@Body() dto: CreateTransactionDto, @Req() req: Request) {
-    return this.finance.createTransaction(dto, this.actor(req), this.context(req));
+    return this.finance.createTransaction(
+      dto,
+      this.actor(req),
+      this.context(req),
+    );
   }
 
   @Patch('transactions/:id')
@@ -164,21 +198,35 @@ export class FinanceController {
     @Headers('if-match') ifMatch: string | undefined,
     @Req() req: Request,
   ) {
-    return this.finance.updateTransaction(id, dto, ifMatch ?? null, this.actor(req), this.context(req));
+    return this.finance.updateTransaction(
+      id,
+      dto,
+      ifMatch ?? null,
+      this.actor(req),
+      this.context(req),
+    );
   }
 
   @Patch('transactions/:id/verify')
   @HttpCode(HttpStatus.OK)
   @Policy('finance:write')
   verifyTransaction(@Param('id') id: string, @Req() req: Request) {
-    return this.finance.verifyTransaction(id, this.actor(req), this.context(req));
+    return this.finance.verifyTransaction(
+      id,
+      this.actor(req),
+      this.context(req),
+    );
   }
 
   @Delete('transactions/:id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @Policy('finance:write')
   removeTransaction(@Param('id') id: string, @Req() req: Request) {
-    return this.finance.removeTransaction(id, this.actor(req), this.context(req));
+    return this.finance.removeTransaction(
+      id,
+      this.actor(req),
+      this.context(req),
+    );
   }
 
   // ─── Pembantu ──────────────────────────────────────────────────────────────

@@ -55,7 +55,13 @@ export class InventoryController {
     @Headers('if-match') ifMatch: string | undefined,
     @Req() req: Request,
   ) {
-    return this.inventory.update(id, dto, ifMatch ?? null, this.actor(req), this.context(req));
+    return this.inventory.update(
+      id,
+      dto,
+      ifMatch ?? null,
+      this.actor(req),
+      this.context(req),
+    );
   }
 
   @Delete(':id')
@@ -72,7 +78,12 @@ export class InventoryController {
     @Body() dto: AddMovementDto,
     @Req() req: Request,
   ) {
-    return this.inventory.addMovement(id, dto, this.actor(req), this.context(req));
+    return this.inventory.addMovement(
+      id,
+      dto,
+      this.actor(req),
+      this.context(req),
+    );
   }
 
   private context(req: Request): WriteContext {

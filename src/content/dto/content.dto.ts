@@ -3,8 +3,15 @@ import { z } from 'zod';
 import { ZodDto } from '../../common/decorators/zod-dto.decorator';
 
 const CONTENT_STATUS = [
-  'idea', 'brief', 'copywriting', 'visual_request',
-  'production', 'review', 'scheduled', 'published', 'evaluation',
+  'idea',
+  'brief',
+  'copywriting',
+  'visual_request',
+  'production',
+  'review',
+  'scheduled',
+  'published',
+  'evaluation',
 ] as const;
 
 export const CreateContentSchema = z.object({
@@ -38,7 +45,9 @@ export const UpdateContentSchema = z
     publishedUrl: z.string().url().optional().nullable(),
     programId: z.string().uuid().optional().nullable(),
   })
-  .refine((d) => Object.keys(d).length > 0, { message: 'Setidaknya satu medan harus dikirim.' });
+  .refine((d) => Object.keys(d).length > 0, {
+    message: 'Setidaknya satu medan harus dikirim.',
+  });
 
 @ZodDto(UpdateContentSchema)
 export class UpdateContentDto {

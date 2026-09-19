@@ -1,6 +1,16 @@
 import {
-  Body, Controller, Delete, Get, Headers,
-  HttpCode, HttpStatus, Param, Patch, Post, Query, Req,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Headers,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Req,
 } from '@nestjs/common';
 import type { Request } from 'express';
 
@@ -8,7 +18,10 @@ import { clientIp } from '../common/http/request-context';
 import type { AuthenticatedUser } from '../common/types/express';
 import { Policy } from '../policy/policy.decorator';
 import {
-  CreateContentDto, ListContentQueryDto, TransitionContentDto, UpdateContentDto,
+  CreateContentDto,
+  ListContentQueryDto,
+  TransitionContentDto,
+  UpdateContentDto,
 } from './dto/content.dto';
 import { ContentService, type WriteContext } from './content.service';
 
@@ -42,7 +55,13 @@ export class ContentController {
     @Headers('if-match') ifMatch: string | undefined,
     @Req() req: Request,
   ) {
-    return this.content.update(id, dto, ifMatch ?? null, this.actor(req), this.context(req));
+    return this.content.update(
+      id,
+      dto,
+      ifMatch ?? null,
+      this.actor(req),
+      this.context(req),
+    );
   }
 
   @Post(':id/transitions')
@@ -64,7 +83,11 @@ export class ContentController {
   }
 
   private context(req: Request): WriteContext {
-    return { actorId: this.actor(req).id, requestId: req.requestId ?? null, ipAddress: clientIp(req) };
+    return {
+      actorId: this.actor(req).id,
+      requestId: req.requestId ?? null,
+      ipAddress: clientIp(req),
+    };
   }
 
   private actor(req: Request): AuthenticatedUser {

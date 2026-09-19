@@ -10,12 +10,12 @@ import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import { AuditService } from '../audit/audit.service';
 import { DRIZZLE } from '../database/database.constants';
-import { inventoryItems, inventoryMovements } from '../database/schema/operations';
-import { profiles } from '../database/schema/organization';
 import {
-  NumberingService,
-  type DbExecutor,
-} from '../numbering/numbering.service';
+  inventoryItems,
+  inventoryMovements,
+} from '../database/schema/operations';
+import { profiles } from '../database/schema/organization';
+import { NumberingService } from '../numbering/numbering.service';
 import { canEditInventoryItem, type Actor } from '../policy/resource';
 import type {
   AddMovementDto,
@@ -50,8 +50,10 @@ export class InventoryService {
    */
   async list(query: ListInventoryQueryDto) {
     const conditions: SQL[] = [isNull(inventoryItems.deletedAt)];
-    if (query.category) conditions.push(eq(inventoryItems.category, query.category));
-    if (query.periodId) conditions.push(eq(inventoryItems.periodId, query.periodId));
+    if (query.category)
+      conditions.push(eq(inventoryItems.category, query.category));
+    if (query.periodId)
+      conditions.push(eq(inventoryItems.periodId, query.periodId));
     if (query.picId) conditions.push(eq(inventoryItems.picId, query.picId));
 
     return this.db
@@ -97,7 +99,7 @@ export class InventoryService {
 
   /**
    * Mendaftarkan barang inventaris baru.
-   * Menghasilkan nomor otomatis `INV-YYYY-#####`. Jika ada stok awal, otomatis 
+   * Menghasilkan nomor otomatis `INV-YYYY-#####`. Jika ada stok awal, otomatis
    * mencatat movement tipe `initial`. Semuanya berjalan dalam satu transaksi.
    */
   async create(dto: CreateInventoryItemDto, context: WriteContext) {
@@ -157,7 +159,9 @@ export class InventoryService {
     context: WriteContext,
   ) {
     const row = await this.findOne(id);
-    this.assertAllowed(canEditInventoryItem(actor, { ...row, divisionCode: null }));
+    this.assertAllowed(
+      canEditInventoryItem(actor, { ...row, divisionCode: null }),
+    );
     this.assertVersion(row.version, ifMatch);
 
     const updated = await this.db
@@ -219,11 +223,11 @@ export class InventoryService {
     const item = await this.findOne(id);
 
     // Mencegah stok menjadi negatif.
-    // Ini dievaluasi secara manual di kode sebelum transaksi, 
+    // Ini dievaluasi secara manual di kode sebelum transaksi,
     // meski ideally bisa dicek via constraint SQL `stock >= 0`.
     if (dto.quantity < 0 && item.stock + dto.quantity < 0) {
       throw new ConflictException(
-        `Stok tidak mencukupi. Tersedia: ${item.stock}, diminta keluar: ${Math.abs(dto.quantity)}.`
+        `Stok tidak mencukupi. Tersedia: ${item.stock}, diminta keluar: ${Math.abs(dto.quantity)}.`,
       );
     }
 
@@ -289,11 +293,15 @@ export class InventoryService {
 
   private assertVersion(current: number, ifMatch: string | null) {
     if (ifMatch === null) {
-      throw new PreconditionFailedException('Header If-Match wajib disertakan untuk mengubah baris ini.');
+      throw new PreconditionFailedException(
+        'Header If-Match wajib disertakan untuk mengubah baris ini.',
+      );
     }
     const expected = Number(ifMatch.replace(/"/g, ''));
     if (expected !== current) {
-      throw new ConflictException('Versi tidak cocok. Data telah diubah oleh orang lain.');
+      throw new ConflictException(
+        'Versi tidak cocok. Data telah diubah oleh orang lain.',
+      );
     }
   }
 }

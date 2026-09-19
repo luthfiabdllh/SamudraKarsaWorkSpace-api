@@ -11,10 +11,7 @@ import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { AuditService } from '../audit/audit.service';
 import { DRIZZLE } from '../database/database.constants';
 import { budgetItems, budgets, transactions } from '../database/schema/finance';
-import {
-  NumberingService,
-  type DbExecutor,
-} from '../numbering/numbering.service';
+import { NumberingService } from '../numbering/numbering.service';
 import { canReadFinance, type Actor } from '../policy/resource';
 import { StorageService } from '../storage/storage.service';
 import type { AuthenticatedUser } from '../common/types/express';
@@ -101,7 +98,11 @@ export class FinanceService {
     return { ...budget, items };
   }
 
-  async createBudget(dto: CreateBudgetDto, actor: Actor, context: WriteContext) {
+  async createBudget(
+    dto: CreateBudgetDto,
+    actor: Actor,
+    context: WriteContext,
+  ) {
     this.assertFinanceAccess(actor);
 
     const created = await this.db.transaction(async (tx) => {
@@ -268,7 +269,6 @@ export class FinanceService {
     itemId: string,
     dto: UpdateBudgetItemDto,
     actor: Actor,
-    context: WriteContext,
   ) {
     this.assertFinanceAccess(actor);
     await this.findBudget(budgetId);
@@ -276,11 +276,15 @@ export class FinanceService {
     const rows = await this.db
       .update(budgetItems)
       .set(dto)
-      .where(and(eq(budgetItems.id, itemId), eq(budgetItems.budgetId, budgetId)))
+      .where(
+        and(eq(budgetItems.id, itemId), eq(budgetItems.budgetId, budgetId)),
+      )
       .returning();
 
     if (!rows[0])
-      throw new NotFoundException(`Rincian anggaran ${itemId} tidak ditemukan.`);
+      throw new NotFoundException(
+        `Rincian anggaran ${itemId} tidak ditemukan.`,
+      );
 
     await this.updateBudgetTotals(budgetId);
 
@@ -298,11 +302,15 @@ export class FinanceService {
 
     const deleted = await this.db
       .delete(budgetItems)
-      .where(and(eq(budgetItems.id, itemId), eq(budgetItems.budgetId, budgetId)))
+      .where(
+        and(eq(budgetItems.id, itemId), eq(budgetItems.budgetId, budgetId)),
+      )
       .returning();
 
     if (!deleted[0])
-      throw new NotFoundException(`Rincian anggaran ${itemId} tidak ditemukan.`);
+      throw new NotFoundException(
+        `Rincian anggaran ${itemId} tidak ditemukan.`,
+      );
 
     await this.updateBudgetTotals(budgetId);
 
@@ -344,8 +352,10 @@ export class FinanceService {
     const conditions: SQL[] = [isNull(transactions.deletedAt)];
     if (query.transactionType)
       conditions.push(eq(transactions.transactionType, query.transactionType));
-    if (query.budgetId) conditions.push(eq(transactions.budgetId, query.budgetId));
-    if (query.periodId) conditions.push(eq(transactions.periodId, query.periodId));
+    if (query.budgetId)
+      conditions.push(eq(transactions.budgetId, query.budgetId));
+    if (query.periodId)
+      conditions.push(eq(transactions.periodId, query.periodId));
     if (query.verified !== undefined)
       conditions.push(eq(transactions.verified, query.verified));
 
@@ -375,7 +385,8 @@ export class FinanceService {
         transactionType: dto.transactionType,
         category: dto.category,
         amount: dto.amount,
-        transactionDate: dto.transactionDate ?? new Date().toISOString().slice(0, 10),
+        transactionDate:
+          dto.transactionDate ?? new Date().toISOString().slice(0, 10),
         picId: dto.picId ?? null,
         programId: dto.programId ?? null,
         budgetId: dto.budgetId ?? null,
@@ -432,11 +443,7 @@ export class FinanceService {
     return updated[0];
   }
 
-  async verifyTransaction(
-    id: string,
-    actor: Actor,
-    context: WriteContext,
-  ) {
+  async verifyTransaction(id: string, actor: Actor, context: WriteContext) {
     this.assertFinanceAccess(actor);
     const row = await this.findTransaction(id);
 
@@ -527,10 +534,20 @@ export class FinanceService {
     this.assertFinanceAccess(actor);
 
     // Ambil semua transaksi
-    const list = await this.db.select().from(transactions).orderBy(desc(transactions.transactionDate));
+    const list = await this.db
+      .select()
+      .from(transactions)
+      .orderBy(desc(transactions.transactionDate));
 
     // Konversi ke CSV (sederhana)
-    const header = ['ID', 'Tanggal', 'Nominal', 'Metode Pembayaran', 'Status', 'Mitra'].join(',');
+    const header = [
+      'ID',
+      'Tanggal',
+      'Nominal',
+      'Metode Pembayaran',
+      'Status',
+      'Mitra',
+    ].join(',');
     const rows = list.map((tx) =>
       [
         tx.id,
@@ -544,7 +561,12 @@ export class FinanceService {
     const csvContent = [header, ...rows].join('\n');
 
     const fileName = `exports/transactions-${new Date().getTime()}.csv`;
-    const url = await this.storage.uploadAndGetDownloadUrl(fileName, csvContent, 'text/csv', 3600);
+    const url = await this.storage.uploadAndGetDownloadUrl(
+      fileName,
+      csvContent,
+      'text/csv',
+      3600,
+    );
 
     return { url };
   }

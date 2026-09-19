@@ -38,7 +38,9 @@ export const UpdateInventoryItemSchema = z
     storageLocation: z.string().trim().optional().nullable(),
     note: z.string().trim().optional().nullable(),
   })
-  .refine((d) => Object.keys(d).length > 0, { message: 'Setidaknya satu medan harus dikirim.' });
+  .refine((d) => Object.keys(d).length > 0, {
+    message: 'Setidaknya satu medan harus dikirim.',
+  });
 
 @ZodDto(UpdateInventoryItemSchema)
 export class UpdateInventoryItemDto {
@@ -52,9 +54,13 @@ export class UpdateInventoryItemDto {
 
 export const AddMovementSchema = z.object({
   movementType: z.enum(MOVEMENT_TYPE),
-  quantity: z.number().int().refine((q) => q !== 0, {
-    message: 'Jumlah tidak boleh nol. Gunakan angka positif untuk masuk, negatif untuk keluar.',
-  }),
+  quantity: z
+    .number()
+    .int()
+    .refine((q) => q !== 0, {
+      message:
+        'Jumlah tidak boleh nol. Gunakan angka positif untuk masuk, negatif untuk keluar.',
+    }),
   movementDate: z.string().datetime().optional(),
   movedBy: z.string().uuid().optional().nullable(),
   note: z.string().trim().optional().nullable(),

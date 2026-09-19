@@ -10,7 +10,11 @@ import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import { AuditService } from '../audit/audit.service';
 import { DRIZZLE } from '../database/database.constants';
-import { partnerFollowups, partners, sponsorBenefits } from '../database/schema/partners';
+import {
+  partnerFollowups,
+  partners,
+  sponsorBenefits,
+} from '../database/schema/partners';
 import { profiles } from '../database/schema/organization';
 import { canEditPartner, type Actor } from '../policy/resource';
 import { TRANSITION_ENTITY } from '../workflow/workflow.constants';
@@ -331,23 +335,24 @@ export class PartnersService {
     return rows[0];
   }
 
-  async updateBenefit(
-    id: string,
-    benefitId: string,
-    dto: UpdateBenefitDto,
-    actor: Actor,
-    context: WriteContext,
-  ) {
+  async updateBenefit(id: string, benefitId: string, dto: UpdateBenefitDto) {
     await this.findOne(id);
 
     const updated = await this.db
       .update(sponsorBenefits)
       .set({ ...dto, updatedAt: new Date() })
-      .where(and(eq(sponsorBenefits.id, benefitId), eq(sponsorBenefits.partnerId, id)))
+      .where(
+        and(
+          eq(sponsorBenefits.id, benefitId),
+          eq(sponsorBenefits.partnerId, id),
+        ),
+      )
       .returning();
 
     if (!updated[0]) {
-      throw new NotFoundException(`Kontraprestasi ${benefitId} tidak ditemukan.`);
+      throw new NotFoundException(
+        `Kontraprestasi ${benefitId} tidak ditemukan.`,
+      );
     }
 
     return updated[0];
@@ -363,11 +368,18 @@ export class PartnersService {
 
     const deleted = await this.db
       .delete(sponsorBenefits)
-      .where(and(eq(sponsorBenefits.id, benefitId), eq(sponsorBenefits.partnerId, id)))
+      .where(
+        and(
+          eq(sponsorBenefits.id, benefitId),
+          eq(sponsorBenefits.partnerId, id),
+        ),
+      )
       .returning();
 
     if (!deleted[0]) {
-      throw new NotFoundException(`Kontraprestasi ${benefitId} tidak ditemukan.`);
+      throw new NotFoundException(
+        `Kontraprestasi ${benefitId} tidak ditemukan.`,
+      );
     }
 
     await this.audit.record({
@@ -404,11 +416,15 @@ export class PartnersService {
 
   private assertVersion(current: number, ifMatch: string | null) {
     if (ifMatch === null) {
-      throw new PreconditionFailedException('Header If-Match wajib disertakan untuk mengubah baris ini.');
+      throw new PreconditionFailedException(
+        'Header If-Match wajib disertakan untuk mengubah baris ini.',
+      );
     }
     const expected = Number(ifMatch.replace(/"/g, ''));
     if (expected !== current) {
-      throw new ConflictException('Versi tidak cocok. Data telah diubah oleh orang lain.');
+      throw new ConflictException(
+        'Versi tidak cocok. Data telah diubah oleh orang lain.',
+      );
     }
   }
 }

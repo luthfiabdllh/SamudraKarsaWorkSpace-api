@@ -5,7 +5,13 @@ import { ZodDto } from '../../common/decorators/zod-dto.decorator';
 // Kosakata
 // ─────────────────────────────────────────────────────────────────────────────
 
-const SHIPMENT_STATUS = ['processing', 'shipped', 'delivered', 'returned', 'cancelled'] as const;
+const SHIPMENT_STATUS = [
+  'processing',
+  'shipped',
+  'delivered',
+  'returned',
+  'cancelled',
+] as const;
 const TRIP_STATUS = ['planned', 'ongoing', 'completed', 'cancelled'] as const;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -15,7 +21,11 @@ const TRIP_STATUS = ['planned', 'ongoing', 'completed', 'cancelled'] as const;
 export const CreateShipmentSchema = z.object({
   packageName: z.string().trim().min(1),
   contentNote: z.string().trim().optional().nullable(),
-  weightKg: z.string().regex(/^\d+(\.\d{1,2})?$/).optional().nullable(),
+  weightKg: z
+    .string()
+    .regex(/^\d+(\.\d{1,2})?$/)
+    .optional()
+    .nullable(),
   dimensionNote: z.string().trim().optional().nullable(),
   origin: z.string().trim().optional().nullable(),
   destination: z.string().trim().optional().nullable(),
@@ -24,7 +34,11 @@ export const CreateShipmentSchema = z.object({
   expedition: z.string().trim().optional().nullable(),
   trackingNumber: z.string().trim().optional().nullable(),
   scheduledAt: z.string().date().optional().nullable(),
-  cost: z.string().regex(/^\d+(\.\d{1,2})?$/).optional().nullable(),
+  cost: z
+    .string()
+    .regex(/^\d+(\.\d{1,2})?$/)
+    .optional()
+    .nullable(),
 });
 
 @ZodDto(CreateShipmentSchema)
@@ -47,7 +61,11 @@ export const UpdateShipmentSchema = z
   .object({
     packageName: z.string().trim().min(1).optional(),
     contentNote: z.string().trim().optional().nullable(),
-    weightKg: z.string().regex(/^\d+(\.\d{1,2})?$/).optional().nullable(),
+    weightKg: z
+      .string()
+      .regex(/^\d+(\.\d{1,2})?$/)
+      .optional()
+      .nullable(),
     dimensionNote: z.string().trim().optional().nullable(),
     origin: z.string().trim().optional().nullable(),
     destination: z.string().trim().optional().nullable(),
@@ -56,7 +74,11 @@ export const UpdateShipmentSchema = z
     expedition: z.string().trim().optional().nullable(),
     trackingNumber: z.string().trim().optional().nullable(),
     scheduledAt: z.string().date().optional().nullable(),
-    cost: z.string().regex(/^\d+(\.\d{1,2})?$/).optional().nullable(),
+    cost: z
+      .string()
+      .regex(/^\d+(\.\d{1,2})?$/)
+      .optional()
+      .nullable(),
     packagingPhotoUrl: z.string().url().optional().nullable(),
     handoverProofUrl: z.string().url().optional().nullable(),
   })

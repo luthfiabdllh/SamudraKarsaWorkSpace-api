@@ -1,6 +1,9 @@
 import { z } from 'zod';
 import { ZodDto } from '../../common/decorators/zod-dto.decorator';
-import { letterDirectionEnum, letterStatusEnum } from '../../database/schema/enums';
+import {
+  letterDirectionEnum,
+  letterStatusEnum,
+} from '../../database/schema/enums';
 
 const LETTER_DIRECTION = letterDirectionEnum.enumValues;
 const LETTER_STATUS = letterStatusEnum.enumValues;
@@ -11,8 +14,16 @@ export const CreateLetterSchema = z.object({
   subject: z.string().trim().min(1),
   senderRecipient: z.string().trim().optional().nullable(),
   institution: z.string().trim().optional().nullable(),
-  letterDate: z.string().date('Format tanggal harus YYYY-MM-DD.').optional().nullable(),
-  dueDate: z.string().date('Format tanggal harus YYYY-MM-DD.').optional().nullable(),
+  letterDate: z
+    .string()
+    .date('Format tanggal harus YYYY-MM-DD.')
+    .optional()
+    .nullable(),
+  dueDate: z
+    .string()
+    .date('Format tanggal harus YYYY-MM-DD.')
+    .optional()
+    .nullable(),
   picId: z.string().uuid().optional().nullable(),
   signerName: z.string().trim().optional().nullable(),
   note: z.string().trim().optional().nullable(),

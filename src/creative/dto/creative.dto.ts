@@ -2,8 +2,15 @@ import { z } from 'zod';
 import { ZodDto } from '../../common/decorators/zod-dto.decorator';
 
 const CREATIVE_STATUS = [
-  'request_received', 'brief', 'queued', 'production',
-  'draft', 'review', 'revision', 'final', 'done',
+  'request_received',
+  'brief',
+  'queued',
+  'production',
+  'draft',
+  'review',
+  'revision',
+  'final',
+  'done',
 ] as const;
 
 export const CreateCreativeSchema = z.object({
@@ -44,7 +51,9 @@ export const UpdateCreativeSchema = z
     dueDate: z.string().date().optional().nullable(),
     finalFileUrl: z.string().url().optional().nullable(),
   })
-  .refine((d) => Object.keys(d).length > 0, { message: 'Setidaknya satu medan harus dikirim.' });
+  .refine((d) => Object.keys(d).length > 0, {
+    message: 'Setidaknya satu medan harus dikirim.',
+  });
 
 @ZodDto(UpdateCreativeSchema)
 export class UpdateCreativeDto {

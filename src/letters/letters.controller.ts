@@ -67,7 +67,13 @@ export class LettersController {
     @Headers('if-match') ifMatch: string | undefined,
     @Req() req: Request,
   ) {
-    return this.letters.update(id, dto, ifMatch ?? null, this.actor(req), this.context(req));
+    return this.letters.update(
+      id,
+      dto,
+      ifMatch ?? null,
+      this.actor(req),
+      this.context(req),
+    );
   }
 
   @Post(':id/transitions')

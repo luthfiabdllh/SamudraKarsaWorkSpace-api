@@ -8,7 +8,11 @@ export const CreateDuesSchema = z.object({
   profileId: z.string().uuid(),
   title: z.string().trim().min(1),
   targetAmount: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Nominal harus angka.'),
-  dueDate: z.string().date('Format tanggal harus YYYY-MM-DD.').optional().nullable(),
+  dueDate: z
+    .string()
+    .date('Format tanggal harus YYYY-MM-DD.')
+    .optional()
+    .nullable(),
   periodId: z.string().uuid(),
   note: z.string().trim().optional().nullable(),
 });
@@ -26,7 +30,10 @@ export class CreateDuesDto {
 export const UpdateDuesSchema = z
   .object({
     title: z.string().trim().min(1).optional(),
-    targetAmount: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
+    targetAmount: z
+      .string()
+      .regex(/^\d+(\.\d{1,2})?$/)
+      .optional(),
     dueDate: z.string().date().optional().nullable(),
     periodId: z.string().uuid().optional().nullable(),
     note: z.string().trim().optional().nullable(),

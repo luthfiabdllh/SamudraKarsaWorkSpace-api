@@ -50,9 +50,11 @@ export class ContentService {
   async list(query: ListContentQueryDto) {
     const conditions: SQL[] = [isNull(contentItems.deletedAt)];
     if (query.status) conditions.push(eq(contentItems.status, query.status));
-    if (query.periodId) conditions.push(eq(contentItems.periodId, query.periodId));
+    if (query.periodId)
+      conditions.push(eq(contentItems.periodId, query.periodId));
     if (query.picId) conditions.push(eq(contentItems.picId, query.picId));
-    if (query.platform) conditions.push(eq(contentItems.platform, query.platform));
+    if (query.platform)
+      conditions.push(eq(contentItems.platform, query.platform));
 
     return this.db
       .select({
@@ -256,11 +258,15 @@ export class ContentService {
 
   private assertVersion(current: number, ifMatch: string | null) {
     if (ifMatch === null) {
-      throw new PreconditionFailedException('Header If-Match wajib disertakan untuk mengubah baris ini.');
+      throw new PreconditionFailedException(
+        'Header If-Match wajib disertakan untuk mengubah baris ini.',
+      );
     }
     const expected = Number(ifMatch.replace(/"/g, ''));
     if (expected !== current) {
-      throw new ConflictException('Versi tidak cocok. Data telah diubah oleh orang lain.');
+      throw new ConflictException(
+        'Versi tidak cocok. Data telah diubah oleh orang lain.',
+      );
     }
   }
 }

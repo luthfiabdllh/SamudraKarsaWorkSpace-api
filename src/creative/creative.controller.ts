@@ -1,6 +1,16 @@
 import {
-  Body, Controller, Delete, Get, Headers,
-  HttpCode, HttpStatus, Param, Patch, Post, Query, Req,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Headers,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Req,
 } from '@nestjs/common';
 import type { Request } from 'express';
 
@@ -8,7 +18,10 @@ import { clientIp } from '../common/http/request-context';
 import type { AuthenticatedUser } from '../common/types/express';
 import { Policy } from '../policy/policy.decorator';
 import {
-  CreateCreativeDto, ListCreativeQueryDto, TransitionCreativeDto, UpdateCreativeDto,
+  CreateCreativeDto,
+  ListCreativeQueryDto,
+  TransitionCreativeDto,
+  UpdateCreativeDto,
 } from './dto/creative.dto';
 import { CreativeService, type WriteContext } from './creative.service';
 
@@ -42,14 +55,29 @@ export class CreativeController {
     @Headers('if-match') ifMatch: string | undefined,
     @Req() req: Request,
   ) {
-    return this.creative.update(id, dto, ifMatch ?? null, this.actor(req), this.context(req));
+    return this.creative.update(
+      id,
+      dto,
+      ifMatch ?? null,
+      this.actor(req),
+      this.context(req),
+    );
   }
 
   @Post(':id/transitions')
   @HttpCode(HttpStatus.OK)
   @Policy('creative:write')
-  transition(@Param('id') id: string, @Body() dto: TransitionCreativeDto, @Req() req: Request) {
-    return this.creative.transition(id, dto, this.actor(req), this.context(req));
+  transition(
+    @Param('id') id: string,
+    @Body() dto: TransitionCreativeDto,
+    @Req() req: Request,
+  ) {
+    return this.creative.transition(
+      id,
+      dto,
+      this.actor(req),
+      this.context(req),
+    );
   }
 
   @Post(':id/revisions')
@@ -67,7 +95,11 @@ export class CreativeController {
   }
 
   private context(req: Request): WriteContext {
-    return { actorId: this.actor(req).id, requestId: req.requestId ?? null, ipAddress: clientIp(req) };
+    return {
+      actorId: this.actor(req).id,
+      requestId: req.requestId ?? null,
+      ipAddress: clientIp(req),
+    };
   }
 
   private actor(req: Request): AuthenticatedUser {

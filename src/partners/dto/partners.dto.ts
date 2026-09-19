@@ -12,9 +12,20 @@ export const CreatePartnerSchema = z.object({
   contactInfo: z.string().trim().optional().nullable(),
   picId: z.string().uuid().optional().nullable(),
   relationChannel: z.string().trim().optional().nullable(),
-  targetSupport: z.string().regex(/^\d+(\.\d{1,2})?$/).optional().nullable(),
-  agreedValue: z.string().regex(/^\d+(\.\d{1,2})?$/).optional().nullable(),
-  fundReceived: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
+  targetSupport: z
+    .string()
+    .regex(/^\d+(\.\d{1,2})?$/)
+    .optional()
+    .nullable(),
+  agreedValue: z
+    .string()
+    .regex(/^\d+(\.\d{1,2})?$/)
+    .optional()
+    .nullable(),
+  fundReceived: z
+    .string()
+    .regex(/^\d+(\.\d{1,2})?$/)
+    .optional(),
   inKindSupport: z.string().trim().optional().nullable(),
   programId: z.string().uuid().optional().nullable(),
   periodId: z.string().uuid().optional().nullable(),
@@ -46,15 +57,28 @@ export const UpdatePartnerSchema = z
     contactInfo: z.string().trim().optional().nullable(),
     picId: z.string().uuid().optional().nullable(),
     relationChannel: z.string().trim().optional().nullable(),
-    targetSupport: z.string().regex(/^\d+(\.\d{1,2})?$/).optional().nullable(),
-    agreedValue: z.string().regex(/^\d+(\.\d{1,2})?$/).optional().nullable(),
-    fundReceived: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
+    targetSupport: z
+      .string()
+      .regex(/^\d+(\.\d{1,2})?$/)
+      .optional()
+      .nullable(),
+    agreedValue: z
+      .string()
+      .regex(/^\d+(\.\d{1,2})?$/)
+      .optional()
+      .nullable(),
+    fundReceived: z
+      .string()
+      .regex(/^\d+(\.\d{1,2})?$/)
+      .optional(),
     inKindSupport: z.string().trim().optional().nullable(),
     proposalUrl: z.string().url().optional().nullable(),
     coverLetterUrl: z.string().url().optional().nullable(),
     mouUrl: z.string().url().optional().nullable(),
   })
-  .refine((d) => Object.keys(d).length > 0, { message: 'Setidaknya satu medan harus dikirim.' });
+  .refine((d) => Object.keys(d).length > 0, {
+    message: 'Setidaknya satu medan harus dikirim.',
+  });
 
 @ZodDto(UpdatePartnerSchema)
 export class UpdatePartnerDto {
@@ -111,7 +135,7 @@ export class AddBenefitDto {
 
 export const UpdateBenefitSchema = AddBenefitSchema.partial().refine(
   (d) => Object.keys(d).length > 0,
-  { message: 'Setidaknya satu medan harus dikirim.' }
+  { message: 'Setidaknya satu medan harus dikirim.' },
 );
 
 @ZodDto(UpdateBenefitSchema)

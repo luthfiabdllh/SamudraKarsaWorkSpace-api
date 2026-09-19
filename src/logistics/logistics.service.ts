@@ -1,10 +1,4 @@
-import {
-  ConflictException,
-  Inject,
-  Injectable,
-  NotFoundException,
-  PreconditionFailedException,
-} from '@nestjs/common';
+import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { and, desc, eq, isNull, type SQL } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
@@ -13,7 +7,6 @@ import { DRIZZLE } from '../database/database.constants';
 import { shipments, trips } from '../database/schema/operations';
 import { profiles } from '../database/schema/organization';
 import { canEditLogistics, type Actor } from '../policy/resource';
-import { TRANSITION_ENTITY } from '../workflow/workflow.constants';
 import { WorkflowService } from '../workflow/workflow.service';
 import type {
   CreateShipmentDto,
@@ -79,7 +72,7 @@ export class LogisticsService {
       .from(shipments)
       .where(and(eq(shipments.id, id), isNull(shipments.deletedAt)))
       .limit(1);
-    
+
     if (!rows[0]) throw new NotFoundException('Pengiriman tidak ditemukan.');
     return rows[0];
   }
@@ -124,10 +117,12 @@ export class LogisticsService {
     context: WriteContext,
   ) {
     const row = await this.detailShipment(id);
-    
-    // Check permission - no specific PIC or division for shipment, but we'll use a dummy item 
+
+    // Check permission - no specific PIC or division for shipment, but we'll use a dummy item
     // to reuse the same logic for owner/division lead check (without picId)
-    this.assertAllowed(canEditLogistics(actor, { id, picId: null, divisionCode: null }));
+    this.assertAllowed(
+      canEditLogistics(actor, { id, picId: null, divisionCode: null }),
+    );
 
     const updated = await this.db
       .update(shipments)
@@ -156,7 +151,9 @@ export class LogisticsService {
     context: WriteContext,
   ) {
     const row = await this.detailShipment(id);
-    this.assertAllowed(canEditLogistics(actor, { id, picId: null, divisionCode: null }));
+    this.assertAllowed(
+      canEditLogistics(actor, { id, picId: null, divisionCode: null }),
+    );
 
     const updated = await this.db
       .update(shipments)
@@ -233,7 +230,7 @@ export class LogisticsService {
       .from(trips)
       .where(and(eq(trips.id, id), isNull(trips.deletedAt)))
       .limit(1);
-    
+
     if (!rows[0]) throw new NotFoundException('Perjalanan tidak ditemukan.');
     return rows[0];
   }
@@ -273,13 +270,15 @@ export class LogisticsService {
     context: WriteContext,
   ) {
     const row = await this.detailTrip(id);
-    this.assertAllowed(canEditLogistics(actor, { id, picId: row.picId, divisionCode: null }));
+    this.assertAllowed(
+      canEditLogistics(actor, { id, picId: row.picId, divisionCode: null }),
+    );
 
     const updated = await this.db
       .update(trips)
-      .set({ 
-        ...dto, 
-        scheduledAt: dto.scheduledAt ? new Date(dto.scheduledAt) : undefined 
+      .set({
+        ...dto,
+        scheduledAt: dto.scheduledAt ? new Date(dto.scheduledAt) : undefined,
       })
       .where(eq(trips.id, id))
       .returning();
@@ -305,7 +304,9 @@ export class LogisticsService {
     context: WriteContext,
   ) {
     const row = await this.detailTrip(id);
-    this.assertAllowed(canEditLogistics(actor, { id, picId: row.picId, divisionCode: null }));
+    this.assertAllowed(
+      canEditLogistics(actor, { id, picId: row.picId, divisionCode: null }),
+    );
 
     const updated = await this.db
       .update(trips)

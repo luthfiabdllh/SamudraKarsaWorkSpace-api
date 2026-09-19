@@ -49,10 +49,13 @@ export class CreativeService {
    */
   async list(query: ListCreativeQueryDto) {
     const conditions: SQL[] = [isNull(creativeRequests.deletedAt)];
-    if (query.status) conditions.push(eq(creativeRequests.status, query.status));
-    if (query.periodId) conditions.push(eq(creativeRequests.periodId, query.periodId));
+    if (query.status)
+      conditions.push(eq(creativeRequests.status, query.status));
+    if (query.periodId)
+      conditions.push(eq(creativeRequests.periodId, query.periodId));
     if (query.picId) conditions.push(eq(creativeRequests.picId, query.picId));
-    if (query.requestId) conditions.push(eq(creativeRequests.requestId, query.requestId));
+    if (query.requestId)
+      conditions.push(eq(creativeRequests.requestId, query.requestId));
 
     return this.db
       .select({
@@ -277,10 +280,13 @@ export class CreativeService {
     const rows = await this.db
       .select()
       .from(creativeRequests)
-      .where(and(eq(creativeRequests.id, id), isNull(creativeRequests.deletedAt)))
+      .where(
+        and(eq(creativeRequests.id, id), isNull(creativeRequests.deletedAt)),
+      )
       .limit(1);
     const row = rows[0];
-    if (!row) throw new NotFoundException(`Permintaan kreatif ${id} tidak ditemukan.`);
+    if (!row)
+      throw new NotFoundException(`Permintaan kreatif ${id} tidak ditemukan.`);
     return row;
   }
 
@@ -292,11 +298,15 @@ export class CreativeService {
 
   private assertVersion(current: number, ifMatch: string | null) {
     if (ifMatch === null) {
-      throw new PreconditionFailedException('Header If-Match wajib disertakan untuk mengubah baris ini.');
+      throw new PreconditionFailedException(
+        'Header If-Match wajib disertakan untuk mengubah baris ini.',
+      );
     }
     const expected = Number(ifMatch.replace(/"/g, ''));
     if (expected !== current) {
-      throw new ConflictException('Versi tidak cocok. Data telah diubah oleh orang lain.');
+      throw new ConflictException(
+        'Versi tidak cocok. Data telah diubah oleh orang lain.',
+      );
     }
   }
 }

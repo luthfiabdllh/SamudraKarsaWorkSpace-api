@@ -74,7 +74,12 @@ export class DuesController {
     @Param('paymentId') paymentId: string,
     @Req() req: Request,
   ) {
-    return this.dues.verifyPayment(id, paymentId, this.actor(req), this.context(req));
+    return this.dues.verifyPayment(
+      id,
+      paymentId,
+      this.actor(req),
+      this.context(req),
+    );
   }
 
   @Delete(':id/payments/:paymentId')
@@ -85,7 +90,12 @@ export class DuesController {
     @Param('paymentId') paymentId: string,
     @Req() req: Request,
   ) {
-    return this.dues.removePayment(id, paymentId, this.actor(req), this.context(req));
+    return this.dues.removePayment(
+      id,
+      paymentId,
+      this.actor(req),
+      this.context(req),
+    );
   }
 
   private context(req: Request): WriteContext {

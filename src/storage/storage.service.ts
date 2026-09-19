@@ -1,6 +1,10 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+} from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 @Injectable()
@@ -15,7 +19,9 @@ export class StorageService {
     this.bucket = this.config.get<string>('R2_BUCKET') ?? 'sksks-exports';
 
     if (!accountId || !accessKeyId || !secretAccessKey) {
-      console.warn('⚠️ Kredensial Cloudflare R2 tidak lengkap. Ekspor akan gagal jika digunakan.');
+      console.warn(
+        '⚠️ Kredensial Cloudflare R2 tidak lengkap. Ekspor akan gagal jika digunakan.',
+      );
     }
 
     this.s3Client = new S3Client({
@@ -65,7 +71,9 @@ export class StorageService {
       return url;
     } catch (err) {
       console.error('Gagal mengunggah ke R2:', err);
-      throw new InternalServerErrorException('Gagal menghasilkan ekspor. Periksa konfigurasi R2.');
+      throw new InternalServerErrorException(
+        'Gagal menghasilkan ekspor. Periksa konfigurasi R2.',
+      );
     }
   }
 }

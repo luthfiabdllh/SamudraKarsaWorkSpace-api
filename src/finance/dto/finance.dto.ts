@@ -1,7 +1,10 @@
 import { z } from 'zod';
 
 import { ZodDto } from '../../common/decorators/zod-dto.decorator';
-import { budgetStatusEnum, transactionTypeEnum } from '../../database/schema/enums';
+import {
+  budgetStatusEnum,
+  transactionTypeEnum,
+} from '../../database/schema/enums';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Kosakata
@@ -112,10 +115,19 @@ export class CreateBudgetItemDto {
 export const UpdateBudgetItemSchema = z
   .object({
     label: z.string().trim().min(1).optional(),
-    quantity: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
+    quantity: z
+      .string()
+      .regex(/^\d+(\.\d{1,2})?$/)
+      .optional(),
     unit: z.string().trim().optional().nullable(),
-    unitPrice: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
-    realizedTotal: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
+    unitPrice: z
+      .string()
+      .regex(/^\d+(\.\d{1,2})?$/)
+      .optional(),
+    realizedTotal: z
+      .string()
+      .regex(/^\d+(\.\d{1,2})?$/)
+      .optional(),
     sortOrder: z.number().int().optional(),
   })
   .refine((d) => Object.keys(d).length > 0, {
@@ -175,7 +187,10 @@ export class CreateTransactionDto {
 export const UpdateTransactionSchema = z
   .object({
     category: z.string().trim().min(1).optional(),
-    amount: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
+    amount: z
+      .string()
+      .regex(/^\d+(\.\d{1,2})?$/)
+      .optional(),
     transactionDate: z.string().date().optional(),
     picId: z.string().uuid().optional().nullable(),
     programId: z.string().uuid().optional().nullable(),

@@ -12,10 +12,7 @@ import { AuditService } from '../audit/audit.service';
 import { DRIZZLE } from '../database/database.constants';
 import { letters } from '../database/schema/letters';
 import { profiles } from '../database/schema/organization';
-import {
-  NumberingService,
-  type DbExecutor,
-} from '../numbering/numbering.service';
+import { NumberingService } from '../numbering/numbering.service';
 import { canEditLetter, type Actor } from '../policy/resource';
 import { TRANSITION_ENTITY } from '../workflow/workflow.constants';
 import { WorkflowService } from '../workflow/workflow.service';
@@ -32,8 +29,6 @@ export interface WriteContext {
   readonly requestId: string | null;
   readonly ipAddress: string | null;
 }
-
-const ENTITY = 'letter';
 
 @Injectable()
 export class LettersService {
@@ -64,7 +59,7 @@ export class LettersService {
       conditions.push(eq(letters.picId, query.picId));
     }
     if (query.cursor) {
-      conditions.push(gt(letters.createdAt, this.cursorDate(query.cursor)));
+      conditions.push(gt(letters.createdAt, this.cursorDate()));
     }
 
     return this.db
@@ -290,7 +285,7 @@ export class LettersService {
     }
   }
 
-  private cursorDate(_cursorId: string): Date {
+  private cursorDate(): Date {
     // Cursor sederhana: implementasi penuh menggunakan keyed cursor
     return new Date(0);
   }
