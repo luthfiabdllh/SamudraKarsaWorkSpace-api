@@ -137,7 +137,6 @@ export class FinanceController {
       itemId,
       dto,
       this.actor(req),
-      this.context(req),
     );
   }
 

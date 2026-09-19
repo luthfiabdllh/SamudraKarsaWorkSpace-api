@@ -126,15 +126,8 @@ export class PartnersController {
     @Param('id') id: string,
     @Param('benefitId') benefitId: string,
     @Body() dto: UpdateBenefitDto,
-    @Req() req: Request,
   ) {
-    return this.partners.updateBenefit(
-      id,
-      benefitId,
-      dto,
-      this.actor(req),
-      this.context(req),
-    );
+    return this.partners.updateBenefit(id, benefitId, dto);
   }
 
   @Delete(':id/benefits/:benefitId')
