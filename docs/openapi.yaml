@@ -87,10 +87,12 @@ tags:
     description: |
       Masuk, keluar, memperbarui token, dan mengganti password.
 
-      Empat dari enam rute publik sistem ada di sini; dua sisanya `health`.
-      Seluruh rute auth yang lain — termasuk `GET /auth/session` dan
-      `POST /auth/change-password` — **tertutup**, dan justru dua itulah yang
-      tetap boleh dipakai saat `mustChangePassword` menyala.
+      Tiga dari enam rute publik sistem ada di sini — `google`, `login`, dan
+      `refresh`. Dua lagi milik `health`, dan yang keenam `GET /docs`.
+      Seluruh rute auth yang lain — `GET /auth/session`,
+      `POST /auth/logout`, dan `POST /auth/change-password` — **tertutup**, dan
+      dua di antaranya justru tetap boleh dipakai saat `mustChangePassword`
+      menyala.
   - name: work-items
     description: Pekerjaan — membuat, mengubah, menugaskan, memindahkan status.
   - name: requests
@@ -164,13 +166,25 @@ paths:
       operationId: loginWithGoogle
       summary: Masuk dengan Google
       description: |
-        Jalur utama. BFF menukar kode OAuth dengan klaim di sisinya, lalu
-        mengirim klaimnya ke sini — backend tidak pernah bicara ke Google.
+        Jalur utama. BFF menukar kode OAuth dengan **ID token** di sisinya, lalu
+        meneruskan token itu apa adanya ke sini.
 
-        **Lima pemeriksaan tertutup** (`PRD-BACKEND.md` §6.2, `PRD-REVAMP.md`
-        §7.8.2), semuanya wajib:
+        **Yang diterima adalah ID token mentah, bukan klaim yang sudah diurai.**
+        Versi awal `PRD-REVAMP.md` §7.8.3 menggambarkan BFF mengirim `email`,
+        `email_verified`, dan `sub` sebagai JSON biasa — dan bentuk itu tidak
+        bisa diverifikasi apa pun, sehingga
+        `{"email": "<email owner>", "emailVerified": true, "sub": "apa saja"}`
+        menghasilkan sesi owner tanpa satu kredensial pun. ID token adalah JWT
+        yang ditandatangani Google, jadi klaimnya bisa diperiksa. Lihat
+        `GoogleLoginRequest`.
 
-        1. `emailVerified` harus `true`
+        Backend **tidak pernah bicara ke Google**: tidak ada penukaran kode, dan
+        tidak ada `GOOGLE_CLIENT_SECRET` di sisi ini.
+
+        **Lima pemeriksaan tertutup** (`PRD-REVAMP.md` §7.8.2), semuanya wajib:
+
+        1. `email_verified` harus `true` — dibaca dari token yang **sudah
+           terverifikasi**, bukan dari isian pemanggil
         2. Email dinormalisasi di kedua sisi
         3. **Tidak ada pembuatan akun otomatis** — profil harus sudah ada
         4. Status selain `inactive` diterima; `inactive` **ditolak**
@@ -178,7 +192,8 @@ paths:
 
         Nomor 3 adalah inti "tertutup". Nomor 5 menutup skenario langka tetapi
         nyata: email lama dipakai ulang orang lain, dan orang itu masuk ke akun
-        anggota sebelumnya.
+        anggota sebelumnya. `sub` yang tersimpan berbeda dari `sub` yang dikirim
+        **ditolak**, bukan diperbarui.
 
         `invited` menjadi `active` pada login pertama yang berhasil.
       security: []
@@ -193,12 +208,13 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/AuthResult' }
-        '403':
+        '401':
           description: |
-            Email tidak terdaftar, atau akunnya nonaktif.
+            Email tidak terdaftar, akunnya nonaktif, `sub`-nya tidak cocok, atau
+            ID tokennya tidak sah.
 
-            Pesannya **selalu sama** untuk kedua sebab itu, dan untuk password
-            yang salah di `/auth/login` (`PRD-BACKEND.md` §6.4). Pesan yang
+            Pesannya **selalu sama** untuk semua sebab itu, dan sama juga dengan
+            kegagalan di `/auth/login` (`PRD-REVAMP.md` §7.8.4). Pesan yang
             berbeda memberi tahu penyerang email mana yang terdaftar — dan itu
             membatalkan sifat tertutup sistem ini.
           content:
@@ -239,7 +255,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/AuthResult' }
-        '403':
+        '401':
           description: |
             Kredensial tidak sah, email tidak terdaftar, atau akun nonaktif —
             satu pesan untuk ketiganya.
@@ -265,9 +281,13 @@ paths:
         sedangkan dengan rotasi, pemakaian token lama adalah bukti bahwa ada dua
         pemegang, dan keluarga token itu bisa dicabut seluruhnya.
 
-        Refresh token **tidak pernah** dikirim di body: ia ada di cookie
-        `httpOnly` yang dipegang BFF (keputusan 31). Yang dikirim ke sini adalah
-        cookie itu apa adanya.
+        Refresh token **tidak pernah** dikirim di badan permintaan: ia ada di
+        cookie `httpOnly` bernama `sk_refresh` yang dipegang BFF (keputusan 31).
+        BFF meneruskan cookie itu apa adanya sebagai header `Cookie`.
+
+        Jalur lewat badan permintaan sengaja **tidak** disediakan. Ia akan
+        menjadi rute kedua bagi token paling sensitif di sistem ini — dan rute
+        kedua itu adalah rute yang isinya ikut tercatat di log permintaan.
       security: []
       responses:
         '200':
@@ -1291,14 +1311,19 @@ components:
     Actor:
       type: object
       description: Siapa yang sedang masuk.
-      required: [id, email, roles, mustChangePassword]
+      required: [id, email, fullName, roles, mustChangePassword]
       properties:
         id:
           type: string
           format: uuid
           description: '`profiles.id` — bukan id di penyedia identitas.'
         email: { type: string, format: email }
-        fullName: { type: [string, 'null'] }
+        fullName:
+          type: [string, 'null']
+          description: |
+            Nama lengkap, untuk ditampilkan. Selalu ada di respons —
+            `profiles.full_name` `not null` — tetapi boleh `null` di kontrak
+            karena baris lama dari `sksks` bisa saja kosong.
         roles:
           type: array
           items: { $ref: '#/components/schemas/Role' }
@@ -1358,23 +1383,34 @@ components:
 
     GoogleLoginRequest:
       type: object
-      required: [email, emailVerified, sub]
+      required: [credential]
       properties:
-        email: { type: string, format: email }
-        emailVerified:
-          type: boolean
-          description: |
-            Wajib `true`. Kalau penyedia pernah mengembalikan email yang belum
-            terverifikasi, orang bisa mengklaim email orang lain — dan itu
-            membatalkan sifat tertutup sistem ini.
-        sub:
+        credential:
           type: string
+          writeOnly: true
           description: |
-            Klaim `sub` dari penyedia identitas, bukan email. Email bisa berubah;
-            `sub` stabil. Setelah login pertama, pencocokan lewat sini — yang
-            menutup skenario email lama dipakai ulang orang lain.
-        fullName: { type: [string, 'null'] }
-        avatarUrl: { type: [string, 'null'], format: uri }
+            **ID token Google, apa adanya.** Ini yang diterima callback OAuth
+            sebagai `id_token`, dan BFF meneruskannya tanpa mengurai apa pun.
+
+            Backend memverifikasi tanda tangannya terhadap kunci publik Google,
+            `aud`-nya terhadap `GOOGLE_CLIENT_ID`, `iss`-nya terhadap
+            `accounts.google.com`, dan `exp`-nya. Klaim di dalamnya baru dibaca
+            **setelah** keempatnya lolos.
+
+            Yang dibaca dari token yang sudah terverifikasi itu:
+
+            - `email_verified` — wajib `true`. Kalau penyedia pernah
+              mengembalikan email yang belum terverifikasi, orang bisa
+              mengklaim email orang lain, dan itu membatalkan sifat tertutup
+              sistem ini.
+            - `sub` — pengenal tetap, bukan email. Email bisa berubah; `sub`
+              stabil. Setelah login pertama, pencocokan lewat sini.
+            - `email` — dinormalisasi (huruf kecil, tanpa spasi) di kedua sisi.
+
+            Bentuk lama `{email, emailVerified, sub}` sebagai JSON biasa **tidak
+            didukung**, dan tidak boleh dikembalikan: ketiganya teks yang bisa
+            ditulis siapa saja, sehingga siapa pun bisa membuat sesi owner tanpa
+            satu kredensial pun.
 
     PasswordLoginRequest:
       type: object
@@ -1396,16 +1432,41 @@ components:
 
     AuthResult:
       type: object
-      required: [actor, accessToken]
+      required: [actor, accessToken, refreshToken, expiresIn]
       properties:
         actor: { $ref: '#/components/schemas/Actor' }
         accessToken:
           type: string
           writeOnly: true
           description: |
-            JWT, umur 15 menit. BFF menyimpannya di cookie `httpOnly`; token ini
-            **tidak pernah** sampai ke JavaScript.
-        expiresIn: { type: integer, description: Detik. }
+            JWT, umur 15 menit, berisi **hanya `sub`**.
+
+            Peran, status keanggotaan, dan `mustChangePassword` sengaja **tidak**
+            ada di dalamnya: klaim adalah salinan keadaan saat token dibuat, dan
+            salinan itu berlaku sampai tokennya kedaluwarsa. Anggota yang
+            dinonaktifkan akan tetap bisa memakai sistem selama sisa umur
+            tokennya, peran yang diturunkan tetap berlaku, dan
+            `mustChangePassword` yang menyala tidak terlihat. Backend memuat
+            aktornya dari database pada setiap permintaan, sehingga ketiganya
+            selalu keadaan sekarang.
+
+            Tanpa `jti`: ia hanya berguna kalau ada daftar cabut access token,
+            dan yang ada adalah umur 15 menit.
+        refreshToken:
+          type: string
+          writeOnly: true
+          description: |
+            **Diteruskan BFF ke cookie `httpOnly`; tidak pernah menyentuh
+            JavaScript.** Umur 7 hari, dan **dirotasi setiap kali dipakai**.
+
+            Backend mengembalikannya di badan respons — bukan lewat `Set-Cookie`
+            — karena yang memegang cookie adalah BFF (keputusan 31), dan
+            backend tidak pernah berbicara langsung dengan browser.
+
+            Yang disimpan di database adalah **SHA-256 dari token ini**, bukan
+            tokennya. Isi tabel yang bocor tidak langsung memberi penyerang sesi
+            siapa pun.
+        expiresIn: { type: integer, description: 'Detik. 900 untuk access token.' }
 
     # ───────────────────────────────────────────────────────────────────────
     # Kolom bersama

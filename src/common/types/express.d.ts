@@ -21,6 +21,17 @@ export interface AuthenticatedUser {
   /** `profiles.id` — bukan `auth.users.id`. */
   readonly id: string;
   readonly email: string;
+
+  /**
+   * Nama lengkap, untuk ditampilkan.
+   *
+   * Opsional karena guard tidak pernah memakainya: `PolicyGuard` memutuskan dari
+   * peran dan status, bukan dari nama. Yang membacanya hanya `GET /auth/session`
+   * — dan menuntutnya wajib di sini akan memaksa setiap penyusun aktor di test
+   * ikut mengisinya, padahal test izin tidak punya urusan dengan nama.
+   */
+  readonly fullName?: string | null;
+
   readonly roles: readonly Role[];
 
   /**

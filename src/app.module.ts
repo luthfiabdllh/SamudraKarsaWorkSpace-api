@@ -12,10 +12,12 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 import { ZodValidationPipe } from './common/pipes/zod-validation.pipe';
 import { AppConfigModule } from './config/config.module';
+import { AuditModule } from './audit/audit.module';
 import { DatabaseModule } from './database/database.module';
 import { HealthModule } from './health/health.module';
 import { PolicyGuard } from './policy/policy.guard';
 import { PolicyModule } from './policy/policy.module';
+import { RateLimitModule } from './rate-limit/rate-limit.module';
 
 /**
  * Akar aplikasi.
@@ -36,6 +38,8 @@ import { PolicyModule } from './policy/policy.module';
   imports: [
     AppConfigModule,
     DatabaseModule,
+    AuditModule,
+    RateLimitModule,
     AuthModule,
     PolicyModule,
     HealthModule,

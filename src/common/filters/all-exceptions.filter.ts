@@ -10,6 +10,8 @@ import { ConfigService } from '@nestjs/config';
 import type { Request, Response } from 'express';
 import { ZodError } from 'zod';
 
+import { RateLimitedException } from '../../rate-limit/rate-limited.exception';
+
 /**
  * Bentuk RFC 7807 yang dipakai seluruh API (§7.5).
  *
@@ -60,6 +62,13 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const request = ctx.getRequest<Request>();
 
     const problem = this.toProblemDetails(exception, request);
+
+    // `Retry-After` dipasang dari sini, bukan dari tempat exceptionnya dilempar
+    // — lihat `RateLimitedException`. Header hanya bisa dipasang pada respons,
+    // dan hanya filter ini yang memegang respons.
+    if (exception instanceof RateLimitedException) {
+      response.setHeader('Retry-After', String(exception.retryAfterSeconds));
+    }
 
     // Hanya error 5xx yang dicatat. 4xx adalah kesalahan pemanggil dan akan
     // membanjiri log kalau ikut dicatat — sementara log hanya bertahan 1 jam

@@ -81,6 +81,36 @@ export const ROLE_POLICY_MATRIX = {
   'member:admin': ['owner', 'co_owner'],
   'audit:read': ['owner', 'co_owner'],
 
+  /**
+   * Data acuan organisasi — divisi, cluster, subunit, periode.
+   *
+   * **Baris ini penambahan, bukan pertentangan.** §7.9 tidak memuatnya karena
+   * tabel itu disusun per fitur, sedangkan keempat tabel ini adalah acuan yang
+   * dipakai hampir setiap fitur dan tidak punya layar sendiri di sana. Sama
+   * seperti `work-item:transition`, ketiadaannya di §7.9 berarti tabel itu
+   * ditulis sebelum bagian ini ada — bukan bahwa aksesnya bebas.
+   *
+   * Dibaca **siapa saja yang sudah masuk**. Nama divisi muncul di daftar
+   * pekerjaan, profil anggota, dan laporan; menyembunyikannya tidak
+   * menyembunyikan apa pun yang berguna, hanya memaksa setiap layar mengirim
+   * id tanpa nama.
+   *
+   * Ditulis hanya `owner`/`co_owner`, dan itu lebih ketat daripada kelihatannya:
+   * puluhan tabel merujuk keempat tabel ini lewat foreign key, sehingga satu
+   * divisi yang salah dibentuk menular ke seluruh sistem dan tidak bisa
+   * diperbaiki dari layar mana pun yang memakainya. Kepala divisi **tidak**
+   * ikut: mengubah nama divisinya sendiri bukan wewenang yang diberikan §7.9
+   * kepadanya.
+   */
+  'organization:read': [
+    'owner',
+    'co_owner',
+    'division_head',
+    'division_deputy',
+    'member',
+  ],
+  'organization:write': ['owner', 'co_owner'],
+
   // Auth — juga dipakai daftar pengecualian must_change_password di bawah
   'auth:session': [
     'owner',
