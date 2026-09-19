@@ -1,7 +1,7 @@
 import {
-  BadRequestException,
   Injectable,
   Optional,
+  UnprocessableEntityException,
   type ArgumentMetadata,
   type PipeTransform,
 } from '@nestjs/common';
@@ -54,11 +54,23 @@ export class ZodValidationPipe implements PipeTransform {
     const result = schema.safeParse(value);
 
     if (!result.success) {
-      throw new BadRequestException({
+      // **422**, bukan 400 — `PRD-REVAMP.md` §7.5.
+      //
+      // 400 disediakan untuk request yang rusak bentuknya: JSON tidak bisa
+      // diurai, tipe yang dikirim bukan yang diminta. Permintaan yang JSON-nya
+      // sah tetapi isinya tidak lolos aturan adalah hal yang berbeda — ia
+      // sampai ke aplikasi dengan utuh, dan yang menolaknya adalah aturan kita,
+      // bukan protokolnya. Perbedaan itu berguna di frontend: 400 berarti ada
+      // yang salah di kode pemanggil, 422 berarti ada yang salah di isian
+      // pengguna, dan yang kedua memang untuk ditampilkan.
+      throw new UnprocessableEntityException({
         code: 'validation_failed',
         title: 'Data yang dikirim tidak valid',
+        // `field`, bukan `path` — §7.5 menetapkan nama itu, dan frontend
+        // memakainya untuk menyorot isian yang salah. Nama yang berbeda di sini
+        // berarti frontend harus menebak, atau menangani dua bentuk.
         errors: result.error.issues.map((issue) => ({
-          path: issue.path.join('.'),
+          field: issue.path.join('.'),
           code: issue.code,
           message: issue.message,
         })),

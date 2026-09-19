@@ -23,7 +23,12 @@ export interface AuthenticatedUser {
   readonly email: string;
   readonly roles: readonly Role[];
 
-  /** Divisi yang dinaungi, kalau perannya kadiv. Dipakai policy resource-scoped. */
+  /**
+   * Divisi yang dinaungi, kalau perannya kepala divisi atau wakilnya. Dipakai
+   * policy resource-scoped — `division_head` dan `division_deputy` sama-sama
+   * mengisi ini, dan pemisahannya baru dilakukan kalau wewenang keduanya
+   * benar-benar dibedakan (keputusan 46).
+   */
   readonly divisionCodes: readonly string[];
 
   /**

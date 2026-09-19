@@ -149,10 +149,25 @@ export class PolicyGuard implements CanActivate {
     }
 
     if (isResourcePolicy(policyName)) {
-      // Fase berikutnya: delegasikan ke fungsi policy di paket
-      // @samudrakarsa/shared. Sampai saat itu, menolak.
+      // Fungsi keputusannya **sudah ada** — `resource.ts` di folder ini. Yang
+      // belum ada adalah jawaban atas pertanyaan desain di bawah, dan itu
+      // disengaja: pertanyaannya lebih baik dijawab sebelum handler pertama
+      // ditulis daripada setelah dua puluh handler menebak jawabannya
+      // masing-masing.
+      //
+      // **Pertanyaannya:** guard hanya melihat permintaan HTTP, sedangkan
+      // fungsi di `resource.ts` menerima **baris** — dan barisnya baru dimuat
+      // service. Kalau guard meloloskan policy resource-scoped, ia meloloskan
+      // berdasarkan sesuatu yang tidak ia ketahui. Kalau ia memuat barisnya
+      // sendiri, ia memuat baris untuk **setiap** request termasuk yang nanti
+      // ditolak — dan pemeriksaan izinnya berpindah ke tempat yang tidak
+      // memegang aturan bisnis.
+      //
+      // Sampai pertanyaan itu dijawab, menolak adalah satu-satunya jawaban yang
+      // tidak bisa salah: endpoint yang belum dibangun menjadi mati, bukan
+      // terbuka. Yang hilang hanyalah kemudahan selama pembangunan.
       this.logger.warn(
-        `Policy resource-scoped belum diimplementasikan: ${policyName}`,
+        `Policy resource-scoped ditolak: keputusan barisnya belum dipasang (${policyName})`,
       );
       return false;
     }

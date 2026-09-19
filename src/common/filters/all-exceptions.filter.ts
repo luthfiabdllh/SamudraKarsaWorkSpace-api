@@ -93,15 +93,19 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     if (exception instanceof ZodError) {
       // Seharusnya tidak sampai ke sini — ZodValidationPipe sudah mengubahnya
-      // menjadi BadRequestException. Ini jaring pengaman kalau ada yang lupa.
+      // menjadi UnprocessableEntityException. Ini jaring pengaman kalau ada yang
+      // lupa, dan bentuknya sengaja dibuat **sama persis** dengan yang dihasilkan
+      // pipe: 422, `errors[].field`. Jaring pengaman yang bentuknya berbeda dari
+      // jalur normalnya justru menambah satu bentuk lagi yang harus ditangani
+      // frontend — kebalikan dari gunanya.
       return {
         ...base,
-        type: this.typeUri('validation_failed'),
+        type: this.typeUri('validation-failed'),
         title: 'Data yang dikirim tidak valid',
-        status: HttpStatus.BAD_REQUEST,
+        status: HttpStatus.UNPROCESSABLE_ENTITY,
         code: 'validation_failed',
         errors: exception.issues.map((issue) => ({
-          path: issue.path.join('.'),
+          field: issue.path.join('.'),
           code: issue.code,
           message: issue.message,
         })),

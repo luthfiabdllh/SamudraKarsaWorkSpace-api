@@ -1,0 +1,1743 @@
+openapi: 3.1.0
+
+info:
+  title: SamudraKarsa Work Space API
+  version: 1.0.0-draft
+  summary: Kontrak Fase 1 — ditulis sebelum satu baris implementasi.
+  description: |
+    Kontrak REST untuk backend `SamudraKarsaWorkSpace-api`.
+
+    ## Kenapa berkas ini ditulis tangan
+
+    `PRD-BACKEND.md` §11 menetapkan bahwa dokumentasi yang **disajikan** di
+    `/api/v1/docs` dihasilkan dari skema Zod, bukan ditulis tangan. Itu tetap
+    berlaku. Berkas ini bukan dokumentasi yang disajikan — ia **kontrak yang
+    ditulis lebih dulu**, dan justru karena itu ia ditulis tangan.
+
+    `PRD-BACKEND.md` §12 Fase 1 meminta kontrak selesai sebelum implementasi,
+    dan tes ditunda (keputusan 7). Konsekuensinya disebut terus terang di sana:
+    **kontrak inilah gerbang mutu yang tersisa.** Setelah `@samudrakarsa/shared`
+    ada (keputusan 37), Swagger dihidupkan dari skema Zod, dan berkas ini
+    berubah peran menjadi acuan yang harus **cocok** dengan keluaran generator —
+    bukan sumbernya lagi.
+
+    Urutannya disengaja. Menulis kontrak lebih dulu memaksa keputusan diambil
+    saat masih murah: menamai field, memilih status code, memutuskan mana yang
+    404 dan mana yang 403. Semuanya gratis sekarang, dan semuanya mahal setelah
+    ada klien yang bergantung padanya.
+
+    ## Cakupan berkas ini
+
+    Lengkap untuk fondasi dan untuk dua domain yang dibangun pertama di Fase 3:
+    `health`, `auth`, `work-items`, `requests`.
+
+    Sembilan belas modul sisanya **belum ada di sini**, dan itu bukan kelalaian:
+    kontrak yang menebak bentuk endpoint yang aturannya belum ditulis akan
+    menjadi kontrak yang harus dilanggar nanti. Setiap fase menambahkan bagiannya
+    sendiri ke berkas ini sebelum modulnya dibangun.
+
+    | Fase | Modul yang ditambahkan ke berkas ini |
+    |---|---|
+    | 3 | `organization`, `profiles` (path-nya menyusul; `work-items` dan `requests` sudah ada) |
+    | 4 | `letters`, `finance`, `dues`, `content`, `creative`, `partners`, `inventory`, `logistics` |
+    | 5 | `meetings`, `calendar`, `milestones`, `announcements`, `feedback`, `notifications`, `attachments` |
+    | 6 | `audit`, `reports`, `recycle-bin`, `settings` |
+
+    ## Tiga hal yang berlaku di seluruh berkas ini
+
+    **Satu, keamanan adalah bawaannya.** `security` dipasang di tingkat akar,
+    sehingga setiap operasi menuntut token kecuali yang menulis
+    `security: []` secara eksplisit. Kebalikannya — menuntut setiap operasi
+    memasang `security` sendiri — berarti satu operasi baru yang lupa
+    memasangnya menjadi endpoint terbuka. Bentuk di berkas ini mencerminkan
+    `APP_GUARD` + `@Public()` di kode, dan alasan keduanya sama: lupa berarti
+    tertutup, bukan terbuka.
+
+    **Dua, 404 dipakai untuk dua hal yang berbeda.** Resource yang tidak ada,
+    dan resource yang tidak boleh dilihat oleh pemanggilnya (`PRD-REVAMP.md`
+    §7.3). Keduanya sengaja tidak dibedakan: membedakannya membocorkan bahwa
+    resource-nya ada. Konsekuensi yang harus disadari klien: **404 bukan berarti
+    "salah alamat"** — ia juga berarti "bukan urusan Anda".
+
+    **Tiga, `403` hanya untuk penolakan yang tidak menyangkut baris.** Peran
+    yang tidak boleh membuka endpoint, atau penanda `mustChangePassword` yang
+    menyala. Endpoint yang resource-scoped selalu menjawab `404`.
+
+    ## Bahasa
+
+    Nama field, nilai enum, dan nilai peran dalam kontrak ini **sama persis**
+    dengan yang tersimpan di database (keputusan 47). Tidak ada lapisan
+    penerjemahan di antaranya, dan itu disengaja: lapisan penerjemahan adalah
+    satu tempat tambahan yang bisa lupa diperbarui. Label Indonesia
+    ("Diajukan", "Kadiv") hanya ada di frontend, lewat dictionary.
+
+servers:
+  - url: /api/v1
+    description: Relatif terhadap host — cara frontend memanggilnya lewat BFF.
+  - url: https://samudra-karsa-work-space-api.vercel.app/api/v1
+    description: |
+      Contoh produksi. Domain sesungguhnya ada di `API_PUBLIC_URL` (keputusan
+      38); ia dipakai untuk membentuk URI `type` pada setiap problem, sehingga
+      pindah domain tidak menuntut apa pun ditulis ulang.
+
+tags:
+  - name: health
+    description: Liveness dan readiness. Satu-satunya tag yang seluruh operasinya publik.
+  - name: auth
+    description: |
+      Masuk, keluar, memperbarui token, dan mengganti password.
+
+      Empat dari enam rute publik sistem ada di sini; dua sisanya `health`.
+      Seluruh rute auth yang lain — termasuk `GET /auth/session` dan
+      `POST /auth/change-password` — **tertutup**, dan justru dua itulah yang
+      tetap boleh dipakai saat `mustChangePassword` menyala.
+  - name: work-items
+    description: Pekerjaan — membuat, mengubah, menugaskan, memindahkan status.
+  - name: requests
+    description: Permintaan lintas divisi dan transisi statusnya.
+
+security:
+  - bearerAuth: []
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Jalur
+# ═══════════════════════════════════════════════════════════════════════════
+
+paths:
+  # ─────────────────────────────────────────────────────────────────────────
+  # Health
+  # ─────────────────────────────────────────────────────────────────────────
+
+  /health:
+    get:
+      tags: [health]
+      operationId: getHealth
+      summary: Liveness
+      description: |
+        Menjawab selama prosesnya hidup. **Tidak menyentuh database sama
+        sekali**, dan itu syaratnya, bukan kebetulan: liveness yang ikut gagal
+        saat database mati tidak bisa membedakan "aplikasinya mati" dari
+        "databasenya mati" — dan dua hal itu menuntut tindakan yang berbeda.
+
+        Dipakai untuk memastikan fungsi serverless benar-benar menyala setelah
+        deploy, dan untuk menjaga fungsi tetap hangat (polling notifikasi
+        frontend 30 detik, `PRD-REVAMP.md` §7.19.2).
+      security: []
+      responses:
+        '200':
+          description: Prosesnya hidup.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Health' }
+
+  /health/ready:
+    get:
+      tags: [health]
+      operationId: getReadiness
+      summary: Readiness
+      description: |
+        Menjalankan `SELECT 1` ke database. `503` kalau tidak bisa.
+
+        Dibedakan dari liveness karena jawabannya berbeda artinya: `503` di sini
+        berarti aplikasinya sehat tetapi tidak bisa melayani apa pun — dan itu
+        keadaan yang perlu diketahui, bukan yang perlu disembunyikan.
+      security: []
+      responses:
+        '200':
+          description: Database terjangkau.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Readiness' }
+        '503':
+          description: Database tidak terjangkau.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Readiness' }
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Auth
+  # ─────────────────────────────────────────────────────────────────────────
+
+  /auth/google:
+    post:
+      tags: [auth]
+      operationId: loginWithGoogle
+      summary: Masuk dengan Google
+      description: |
+        Jalur utama. BFF menukar kode OAuth dengan klaim di sisinya, lalu
+        mengirim klaimnya ke sini — backend tidak pernah bicara ke Google.
+
+        **Lima pemeriksaan tertutup** (`PRD-BACKEND.md` §6.2, `PRD-REVAMP.md`
+        §7.8.2), semuanya wajib:
+
+        1. `emailVerified` harus `true`
+        2. Email dinormalisasi di kedua sisi
+        3. **Tidak ada pembuatan akun otomatis** — profil harus sudah ada
+        4. Status selain `inactive` diterima; `inactive` **ditolak**
+        5. `sub` disimpan; pencocokan berikutnya lewat `sub`, bukan `email`
+
+        Nomor 3 adalah inti "tertutup". Nomor 5 menutup skenario langka tetapi
+        nyata: email lama dipakai ulang orang lain, dan orang itu masuk ke akun
+        anggota sebelumnya.
+
+        `invited` menjadi `active` pada login pertama yang berhasil.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/GoogleLoginRequest' }
+      responses:
+        '200':
+          description: Berhasil masuk.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthResult' }
+        '403':
+          description: |
+            Email tidak terdaftar, atau akunnya nonaktif.
+
+            Pesannya **selalu sama** untuk kedua sebab itu, dan untuk password
+            yang salah di `/auth/login` (`PRD-BACKEND.md` §6.4). Pesan yang
+            berbeda memberi tahu penyerang email mana yang terdaftar — dan itu
+            membatalkan sifat tertutup sistem ini.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /auth/login:
+    post:
+      tags: [auth]
+      operationId: loginWithPassword
+      summary: Masuk dengan password
+      description: |
+        Jalur cadangan, untuk anggota yang tidak bisa atau tidak mau memakai
+        Google. Password diperiksa dengan **argon2id**, bukan bcrypt.
+
+        Memanggil `canAuthenticate(email)` yang **sama persis** dengan yang
+        dipanggil jalur Google (`PRD-BACKEND.md` §6.1). Dua jalur masuk berarti
+        dua tempat aturan "tertutup" ditegakkan; satu fungsi berarti tidak ada
+        yang bisa menyimpang.
+
+        Kalau passwordnya adalah password sementara dari owner,
+        `mustChangePassword` menyala di hasilnya — dan sejak saat itu backend
+        menolak seluruh endpoint kecuali jalur ganti-password
+        (`PRD-BACKEND.md` §6.5).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PasswordLoginRequest' }
+      responses:
+        '200':
+          description: Berhasil masuk.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthResult' }
+        '403':
+          description: |
+            Kredensial tidak sah, email tidak terdaftar, atau akun nonaktif —
+            satu pesan untuk ketiganya.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /auth/refresh:
+    post:
+      tags: [auth]
+      operationId: refreshSession
+      summary: Memperbarui access token
+      description: |
+        Refresh token **dirotasi setiap dipakai**: yang lama langsung dicabut dan
+        digantikan yang baru (`PRD-REVAMP.md` §7.8.7).
+
+        Rotasi bukan kerapian. Refresh token yang tidak dirotasi berlaku sampai
+        kedaluwarsa tanpa cara mengetahui bahwa ia sudah disalin orang lain —
+        sedangkan dengan rotasi, pemakaian token lama adalah bukti bahwa ada dua
+        pemegang, dan keluarga token itu bisa dicabut seluruhnya.
+
+        Refresh token **tidak pernah** dikirim di body: ia ada di cookie
+        `httpOnly` yang dipegang BFF (keputusan 31). Yang dikirim ke sini adalah
+        cookie itu apa adanya.
+      security: []
+      responses:
+        '200':
+          description: Token baru.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthResult' }
+        '401':
+          $ref: '#/components/responses/NotAuthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /auth/session:
+    get:
+      tags: [auth]
+      operationId: getSession
+      summary: Siapa yang sedang masuk
+      description: |
+        Mengembalikan aktor yang sedang masuk, dari tokennya.
+
+        **Tidak publik**, dan tetap boleh dipakai saat `mustChangePassword`
+        menyala — ia ada di `PENDING_PASSWORD_EXEMPT`. Tanpa pengecualian itu,
+        frontend tidak bisa mengetahui bahwa yang perlu ditampilkan adalah layar
+        ganti password: ia hanya akan menerima penolakan tanpa tahu sebabnya.
+      responses:
+        '200':
+          description: Aktor yang sedang masuk.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Actor' }
+        '401':
+          $ref: '#/components/responses/NotAuthenticated'
+
+  /auth/logout:
+    post:
+      tags: [auth]
+      operationId: logout
+      summary: Keluar
+      description: |
+        Mencabut refresh token yang sedang dipakai. Access token yang masih
+        berlaku **tidak** bisa dicabut — ia mati sendiri dalam 15 menit.
+        Itu batas yang diterima, bukan yang terlupa.
+      responses:
+        '204':
+          description: Sesi dicabut.
+        '401':
+          $ref: '#/components/responses/NotAuthenticated'
+
+  /auth/change-password:
+    post:
+      tags: [auth]
+      operationId: changePassword
+      summary: Mengganti password sendiri
+      description: |
+        Satu-satunya jalan keluar saat `mustChangePassword` menyala.
+
+        Dua akibat yang wajib menyertainya (`PRD-REVAMP.md` §7.8.6):
+
+        - Penanda `mustChangePassword` dimatikan
+        - **Seluruh refresh token anggota itu dicabut.** Sesi lama tidak boleh
+          bertahan setelah password berubah — kalau bertahan, mengganti password
+          bukan tindakan pengamanan, melainkan tindakan yang tidak mengubah apa
+          pun bagi orang yang sudah memegang sesinya.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChangePasswordRequest' }
+      responses:
+        '204':
+          description: Password diganti, sesi lain dicabut.
+        '401':
+          $ref: '#/components/responses/NotAuthenticated'
+        '409':
+          description: Password saat ini tidak cocok.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Pekerjaan
+  # ─────────────────────────────────────────────────────────────────────────
+
+  /work-items:
+    get:
+      tags: [work-items]
+      operationId: listWorkItems
+      summary: Daftar pekerjaan
+      description: |
+        Paginasi **cursor-based** (`PRD-REVAMP.md` §7.6). Offset rusak saat ada
+        data masuk: halaman bergeser, dan ada baris yang terlewat atau muncul
+        dua kali.
+
+        Policy `work-item:read` — seluruh peran boleh.
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Include'
+        - name: status
+          in: query
+          description: Beberapa nilai dipisah koma.
+          required: false
+          schema:
+            type: array
+            items: { $ref: '#/components/schemas/WorkStatus' }
+          style: form
+          explode: false
+        - name: type
+          in: query
+          required: false
+          schema:
+            type: array
+            items: { $ref: '#/components/schemas/WorkItemType' }
+          style: form
+          explode: false
+        - name: priority
+          in: query
+          required: false
+          schema:
+            type: array
+            items: { $ref: '#/components/schemas/PriorityLevel' }
+          style: form
+          explode: false
+        - name: divisionId
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+        - name: picId
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+        - name: dueBefore
+          in: query
+          required: false
+          schema: { type: string, format: date }
+        - name: q
+          in: query
+          description: Pencarian teks pada judul dan nomor.
+          required: false
+          schema: { type: string, maxLength: 120 }
+        - name: includeArchived
+          in: query
+          description: |
+            Menyertakan baris yang `archivedAt`-nya terisi. Baris yang
+            `deletedAt`-nya terisi **tidak pernah** muncul di sini — ia ada di
+            recycle bin (`PRD-REVAMP.md` §14.2).
+          required: false
+          schema: { type: boolean, default: false }
+      responses:
+        '200':
+          description: Halaman pertama, atau halaman berikutnya.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkItemPage' }
+        '401':
+          $ref: '#/components/responses/NotAuthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      tags: [work-items]
+      operationId: createWorkItem
+      summary: Membuat pekerjaan
+      description: |
+        Nomor pekerjaan (`WI-YYYY-#####`) **dihasilkan backend** di dalam
+        transaksi yang sama dengan INSERT-nya, lewat tabel penghitung dengan
+        `SELECT ... FOR UPDATE` (`PRD-BACKEND.md` §8.2). Klien tidak pernah
+        mengirimnya, dan tidak ada celah nomor: `nextval()` memberi celah setiap
+        kali transaksi bergulung balik, sedangkan nomor pekerjaan adalah nomor
+        dokumen yang orang rujuk.
+
+        Status awalnya `draft`. Pekerjaan yang lahir dari sebuah permintaan
+        **tidak** dibuat di sini — ia dibuat backend saat permintaannya diajukan
+        (temuan #7).
+
+        Policy `work-item:create` — seluruh peran boleh.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WorkItemCreate' }
+      responses:
+        '201':
+          description: Dibuat.
+          headers:
+            Location:
+              description: URL pekerjaan yang baru dibuat.
+              schema: { type: string }
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkItem' }
+        '401':
+          $ref: '#/components/responses/NotAuthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /work-items/{id}:
+    parameters:
+      - $ref: '#/components/parameters/WorkItemId'
+
+    get:
+      tags: [work-items]
+      operationId: getWorkItem
+      summary: Satu pekerjaan
+      description: |
+        Mengembalikan `availableTransitions` — daftar status yang **sah bagi
+        aktor ini** pada pekerjaan ini (`PRD-BACKEND.md` §9.1).
+
+        Ini bukan kenyamanan. Di `sksks`, aturan transisi hidup di satu komponen
+        frontend dan `REQUEST_WORKFLOW` bahkan kode mati (temuan §5.2.2). Dengan
+        bentuk ini frontend **tidak punya pilihan selain** memakai daftar dari
+        backend, sehingga state machine tidak bisa lagi hanya ada di UI.
+      responses:
+        '200':
+          description: Pekerjaan ditemukan dan boleh dilihat.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkItem' }
+        '401':
+          $ref: '#/components/responses/NotAuthenticated'
+        '404':
+          $ref: '#/components/responses/NotFoundOrHidden'
+
+    patch:
+      tags: [work-items]
+      operationId: updateWorkItem
+      summary: Mengubah sebagian pekerjaan
+      description: |
+        Policy `work-item:update` (`canEditWorkItem`):
+
+        | Peran | Boleh mengubah |
+        |---|---|
+        | `owner`, `co_owner` | semuanya |
+        | `division_head`, `division_deputy` | pekerjaan divisinya |
+        | `member` | pekerjaan yang ia buat, ia pimpin, atau ia kerjakan |
+
+        Penolakan selalu **404**, bukan 403.
+
+        Field wajib per status diperiksa di sini, bukan di endpoint transisi:
+        `holdReason` saat `on_hold` (keputusan 48), `completionSummary` saat
+        `done`, dan `blockerReason` + `assistanceNeeded` saat pekerjaan
+        dilaporkan terhambat. Ketiganya juga dijaga `CHECK` di database, jadi
+        jalur mana pun yang melewatkannya tetap ditolak.
+
+        **Mengubah `status` lewat sini ditolak** — status dipindahkan lewat
+        `/work-items/{id}/transitions`. Satu jalur untuk satu operasi bermakna,
+        seperti aksi domain lain.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WorkItemPatch' }
+      responses:
+        '200':
+          description: Diubah.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkItem' }
+        '401':
+          $ref: '#/components/responses/NotAuthenticated'
+        '404':
+          $ref: '#/components/responses/NotFoundOrHidden'
+        '409':
+          $ref: '#/components/responses/VersionConflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
+    delete:
+      tags: [work-items]
+      operationId: deleteWorkItem
+      summary: Menghapus pekerjaan (soft)
+      description: |
+        Soft delete — mengisi `deletedAt`. Barisnya masuk recycle bin dan bisa
+        dipulihkan; ia **hilang dari seluruh daftar** sampai dipulihkan.
+
+        Policy `work-item:delete` (`canDeleteWorkItem`): `owner`, `co_owner`, dan
+        pemimpin divisinya. **`member` tidak**, bahkan atas pekerjaannya sendiri —
+        berbeda dari `PATCH`, dan perbedaan itu disengaja (§7.9).
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '204':
+          description: Dihapus.
+        '401':
+          $ref: '#/components/responses/NotAuthenticated'
+        '404':
+          $ref: '#/components/responses/NotFoundOrHidden'
+        '409':
+          $ref: '#/components/responses/VersionConflict'
+
+  /work-items/{id}/pic:
+    parameters:
+      - $ref: '#/components/parameters/WorkItemId'
+
+    patch:
+      tags: [work-items]
+      operationId: setWorkItemPic
+      summary: Menetapkan penanggung jawab
+      description: |
+        Dipisahkan dari `PATCH /work-items/{id}` karena aturannya berbeda, dan
+        karena inilah jalur "klaim pekerjaan tanpa PIC" (§9.3 M2).
+
+        Policy `work-item:set-pic` (`canChangePic`):
+
+        | Peran | Boleh |
+        |---|---|
+        | `owner`, `co_owner` | selalu |
+        | `division_head`, `division_deputy` | pada divisinya |
+        | `member` | hanya mengisi PIC pada `task` yang **belum punya PIC** |
+
+        Mengosongkan PIC (`null`) hanya boleh oleh pemimpin divisi dan
+        owner/co-owner — anggota boleh **mengisi**, tidak boleh **mengosongkan**.
+        Mengosongkan berarti meninggalkan pekerjaan tanpa penanggung jawab, dan
+        itu keputusan, bukan inisiatif.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SetPicRequest' }
+      responses:
+        '200':
+          description: PIC ditetapkan.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkItem' }
+        '401':
+          $ref: '#/components/responses/NotAuthenticated'
+        '404':
+          $ref: '#/components/responses/NotFoundOrHidden'
+        '409':
+          $ref: '#/components/responses/VersionConflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /work-items/{id}/transitions:
+    parameters:
+      - $ref: '#/components/parameters/WorkItemId'
+
+    post:
+      tags: [work-items]
+      operationId: transitionWorkItem
+      summary: Memindahkan status pekerjaan
+      description: |
+        Aksi domain punya endpoint sendiri, bukan menumpang `PATCH`
+        (`PRD-REVAMP.md` §7.3). Alasannya bukan kerapian: memindahkan status
+        adalah operasi bermakna dengan aturan sendiri, dan aturan itu tidak boleh
+        bercampur dengan aturan mengubah judul.
+
+        **Konflik sinkronisasi menutup transisi bagi semua peran, termasuk
+        `owner`** (keputusan 49). Penanda `syncConflictAt` berarti pekerjaan ini
+        dan permintaan asalnya tidak lagi sepakat; memindahkan status salah
+        satunya berarti memilih satu sisi secara diam-diam. Yang menutup konflik
+        adalah **penyelesaiannya**, bukan wewenang yang lebih tinggi.
+
+        Selain itu, wewenangnya mengikuti `PATCH` — `canEditWorkItem`.
+
+        Transisi yang sah saja yang diterima; yang tidak sah dijawab `409`,
+        bukan `422`, karena permintaannya benar tetapi keadaannya tidak
+        memungkinkan. Daftar yang sah untuk aktor tertentu ada di
+        `availableTransitions` pada `GET`.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WorkItemTransitionRequest' }
+      responses:
+        '200':
+          description: Status berpindah.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkItem' }
+        '401':
+          $ref: '#/components/responses/NotAuthenticated'
+        '404':
+          $ref: '#/components/responses/NotFoundOrHidden'
+        '409':
+          $ref: '#/components/responses/TransitionRejected'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Permintaan
+  # ─────────────────────────────────────────────────────────────────────────
+
+  /requests:
+    get:
+      tags: [requests]
+      operationId: listRequests
+      summary: Daftar permintaan
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Include'
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: array
+            items: { $ref: '#/components/schemas/RequestStatus' }
+          style: form
+          explode: false
+        - name: type
+          in: query
+          required: false
+          schema:
+            type: array
+            items: { $ref: '#/components/schemas/RequestType' }
+          style: form
+          explode: false
+        - name: targetDivisionId
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+        - name: requesterId
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+        - name: q
+          in: query
+          required: false
+          schema: { type: string, maxLength: 120 }
+        - name: includeArchived
+          in: query
+          required: false
+          schema: { type: boolean, default: false }
+      responses:
+        '200':
+          description: Halaman pertama, atau halaman berikutnya.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RequestPage' }
+        '401':
+          $ref: '#/components/responses/NotAuthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      tags: [requests]
+      operationId: createRequest
+      summary: Membuat permintaan
+      description: |
+        Nomor `REQ-YYYY-#####` dihasilkan backend, sama seperti nomor pekerjaan.
+
+        Status awalnya `draft`. **Pekerjaan terhubung belum dibuat di sini** —
+        ia dibuat saat permintaannya diajukan, bukan saat disimpannya sebagai
+        draft (temuan #7). Membuatnya lebih awal berarti setiap draft yang tidak
+        pernah diajukan meninggalkan pekerjaan yang tidak dikerjakan siapa pun.
+
+        `extraFields` adalah kolom per jenis permintaan: nomor rekening untuk
+        RAB, ukuran untuk desain. Empat belas jenis punya kebutuhan berbeda, dan
+        empat belas tabel akan jauh lebih mahal daripada satu kolom `jsonb` yang
+        divalidasi skema per jenis.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RequestCreate' }
+      responses:
+        '201':
+          description: Dibuat.
+          headers:
+            Location:
+              schema: { type: string }
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Request' }
+        '401':
+          $ref: '#/components/responses/NotAuthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /requests/{id}:
+    parameters:
+      - $ref: '#/components/parameters/RequestId'
+
+    get:
+      tags: [requests]
+      operationId: getRequest
+      summary: Satu permintaan
+      responses:
+        '200':
+          description: Permintaan ditemukan dan boleh dilihat.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Request' }
+        '401':
+          $ref: '#/components/responses/NotAuthenticated'
+        '404':
+          $ref: '#/components/responses/NotFoundOrHidden'
+
+    patch:
+      tags: [requests]
+      operationId: updateRequest
+      summary: Mengubah sebagian permintaan
+      description: |
+        Mengubah `status` lewat sini **ditolak** — pakai
+        `/requests/{id}/transitions`.
+
+        Perubahan yang menyentuh `targetDivisionId` atau nilai anggaran
+        menyalakan penanda sinkronisasi kalau pekerjaan terhubungnya sudah ada,
+        karena keduanya mengubah dasar keputusan divisi tujuan.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RequestPatch' }
+      responses:
+        '200':
+          description: Diubah.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Request' }
+        '401':
+          $ref: '#/components/responses/NotAuthenticated'
+        '404':
+          $ref: '#/components/responses/NotFoundOrHidden'
+        '409':
+          $ref: '#/components/responses/VersionConflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /requests/{id}/transitions:
+    parameters:
+      - $ref: '#/components/parameters/RequestId'
+
+    post:
+      tags: [requests]
+      operationId: transitionRequest
+      summary: Memindahkan status permintaan
+      description: |
+        Policy `request:transition` (`canTransitionRequest`):
+
+        | Peran | Boleh |
+        |---|---|
+        | `owner`, `co_owner` | semua transisi |
+        | `division_head`, `division_deputy` | permintaan yang **divisi tujuannya** ia pimpin |
+        | `member` | hanya `draft → submitted`, dan hanya atas permintaannya sendiri |
+
+        Baris terakhir **mengetatkan** `PRD-REVAMP.md` §7.9, yang menulis "hanya
+        `draft→submitted`" tanpa menyebut siapa pemilik draftnya. Draft yang bisa
+        diajukan orang lain adalah cara mengirim permintaan atas nama orang lain
+        tanpa ia tahu. `INVENTARIS-ATURAN.md` §15 memang meminta §7.9
+        **diketatkan**, bukan disalin dari matriks §10 yang melonggarkan hampir
+        semuanya.
+
+        **`need_clarification` tidak pernah dipetakan ke `need_review`**
+        (temuan #5). Keduanya berbeda: `need_review` berarti pekerjaannya sudah
+        jadi dan menunggu dinilai, `need_clarification` berarti belum bisa
+        dimulai karena ada yang harus dijelaskan pemohon lebih dulu. Transisi ke
+        `need_clarification` mewajibkan `clarificationNote`; ke `on_hold`
+        mewajibkan `holdReason`; ke `done` mewajibkan `resultSummary`.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RequestTransitionRequest' }
+      responses:
+        '200':
+          description: Status berpindah.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Request' }
+        '401':
+          $ref: '#/components/responses/NotAuthenticated'
+        '404':
+          $ref: '#/components/responses/NotFoundOrHidden'
+        '409':
+          $ref: '#/components/responses/TransitionRejected'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Komponen
+# ═══════════════════════════════════════════════════════════════════════════
+
+components:
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Access token JWT, umur 15 menit, berisi `sub`, `roles`, `divisionCodes`,
+        dan `jti`.
+
+        `roles` berupa array (keputusan 52), bukan satu nilai — sehingga token
+        tidak perlu diterbitkan ulang saat seseorang ditambahkan sebagai kepala
+        divisi di divisi lain. Klaimnya adalah **salinan** keadaan saat token
+        dibuat; sumber kebenarannya tetap `profiles`, dan umur 15 menit adalah
+        batas berapa lama salinan itu boleh basi.
+
+        Dikirim **oleh BFF**, bukan oleh browser (keputusan 31). Token tidak
+        pernah menyentuh JavaScript: BFF menyimpannya di cookie `httpOnly` dan
+        menukarnya menjadi header ini saat memanggil backend. Konsekuensinya
+        untuk kontrak ini: tidak ada satu pun operasi di sini yang boleh
+        mengandalkan cookie, dan CORS boleh menolak seluruh origin browser
+        (`PRD-SISTEM.md` §5).
+
+  parameters:
+
+    WorkItemId:
+      name: id
+      in: path
+      required: true
+      description: `work_items.id`
+      schema: { type: string, format: uuid }
+
+    RequestId:
+      name: id
+      in: path
+      required: true
+      description: `requests.id`
+      schema: { type: string, format: uuid }
+
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      description: |
+        Penanda posisi, berasal dari `meta.nextCursor` halaman sebelumnya.
+        Opaque — klien tidak boleh mengurai atau menyusunnya sendiri.
+      schema: { type: string }
+
+    Limit:
+      name: limit
+      in: query
+      required: false
+      description: |
+        **Selalu ada batas atasnya** — 100. Tanpa batas, satu endpoint cukup
+        untuk menarik seluruh tabel, dan itu terjadi lebih cepat daripada yang
+        diduga: cukup satu klien yang lupa meneruskan `limit`.
+      schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+
+    Sort:
+      name: sort
+      in: query
+      required: false
+      description: '`sort=field` naik, `sort=-field` turun, dipisah koma.'
+      schema: { type: string, example: '-dueDate,title' }
+
+    Include:
+      name: include
+      in: query
+      required: false
+      description: |
+        Memuat relasi yang tidak disertakan secara bawaan. Dipakai untuk
+        menghindari permintaan tambahan dari frontend, bukan untuk mengizinkan
+        pengambilan tanpa batas — daftar nilai yang sah ditentukan per endpoint.
+      schema: { type: string, example: 'assignees,division' }
+
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: |
+        Kunci idempotensi untuk operasi tulis (`PRD-REVAMP.md` §7.10).
+        Kunci yang sama dengan body yang sama mengembalikan respons tersimpan,
+        bukan membuat baris kedua. Kunci yang sama dengan body yang **berbeda**
+        ditolak `409` — itu tanda klien memakai ulang kuncinya untuk hal lain.
+
+        Disimpan 24 jam di `idempotency_keys`. Berguna terutama untuk unggahan
+        ulang setelah koneksi putus: percobaan kedua tidak menghasilkan dua
+        nomor dokumen.
+      schema: { type: string, maxLength: 255, example: '01J8XQ7K3M9W2P' }
+
+    IfMatch:
+      name: If-Match
+      in: header
+      required: false
+      description: |
+        Optimistic locking (`PRD-REVAMP.md` §7.16). Isinya `version` yang
+        dibaca klien, sama dengan `ETag` respons terakhir.
+
+        ```
+        If-Match: "7"
+        ```
+
+        Versi yang tidak cocok dijawab `409`, bukan ditimpa diam-diam. Ini yang
+        membuat dua orang mengedit baris yang sama tidak saling menimpa tanpa
+        sadar — yang kalah diberi tahu, bukan dikalahkan tanpa suara.
+
+        Wajib untuk setiap operasi tulis di domain Fase 3 ke atas. Kalau
+        dihilangkan, server memakai `version` yang dibacanya sendiri — dan itu
+        berarti last-write-wins, yang justru ingin dihindari.
+      schema: { type: string, example: '"7"' }
+
+  headers:
+
+    ETag:
+      description: Versi baris, dikutip sesuai RFC 9110. Kirim kembali apa adanya di `If-Match`.
+      schema: { type: string, example: '"7"' }
+
+  responses:
+
+    NotAuthenticated:
+      description: Token tidak ada, kedaluwarsa, atau tidak sah.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+          example:
+            type: https://api.invalid/problems/not-authenticated
+            title: Permintaan ini memerlukan token yang sah
+            status: 401
+            code: not_authenticated
+            instance: /api/v1/work-items
+            requestId: 01J8XQ7K3M9W2P
+
+    Forbidden:
+      description: |
+        Terautentikasi, tetapi perannya tidak boleh membuka endpoint ini.
+
+        **Hanya dipakai untuk penolakan yang tidak menyangkut baris.** Penolakan
+        atas sebuah baris selalu `404` — lihat `NotFoundOrHidden`.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+
+    NotFoundOrHidden:
+      description: |
+        Pekerjaan atau permintaan itu tidak ada — **atau** ada tetapi tidak boleh
+        dilihat pemanggilnya.
+
+        Keduanya sengaja tidak dibedakan (`PRD-REVAMP.md` §7.3): `403` di sini
+        akan memberi tahu penyerang bahwa barisnya ada, dan bagi sebagian tabel
+        di sistem ini keberadaan barisnya sendiri sudah merupakan informasi.
+
+        Konsekuensi untuk klien: **jangan membaca `404` sebagai "salah ketik"**.
+        Ia juga berarti "bukan urusan Anda", dan menampilkan "tidak ditemukan"
+        adalah jawaban yang benar untuk keduanya.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+          example:
+            type: https://api.invalid/problems/not-found
+            title: Tidak ditemukan
+            status: 404
+            instance: /api/v1/work-items/9f1c…
+            requestId: 01J8XQ7K3M9W2P
+
+    VersionConflict:
+      description: |
+        `If-Match` tidak cocok dengan `version` yang tersimpan.
+
+        Berbeda dari `TransitionRejected`: yang ini berarti **barisnya sudah
+        berubah sejak klien membacanya**, bukan bahwa perpindahan statusnya tidak
+        sah. Klien harus memuat ulang barisnya lebih dulu.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+
+    TransitionRejected:
+      description: |
+        Perpindahan statusnya tidak sah dari keadaan sekarang — atau ada konflik
+        sinkronisasi yang belum diselesaikan (keputusan 49), — atau field wajib
+        untuk status tujuan belum diisi.
+
+        `409`, bukan `422`: permintaannya benar, keadaannya yang tidak
+        memungkinkan. `availableTransitions` pada `GET` berisi daftar yang sah
+        untuk aktor itu saat itu.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+
+    ValidationFailed:
+      description: |
+        Isian tidak lolos aturan (`PRD-REVAMP.md` §7.5).
+
+        `422`, bukan `400`. Perbedaannya berguna: `400` berarti ada yang salah
+        di kode pemanggil, `422` berarti ada yang salah di isian pengguna — dan
+        hanya yang kedua yang memang untuk ditampilkan.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/ValidationProblem' }
+          example:
+            type: https://api.invalid/problems/validation-failed
+            title: Data yang dikirim tidak valid
+            status: 422
+            code: validation_failed
+            instance: /api/v1/work-items
+            requestId: 01J8XQ7K3M9W2P
+            errors:
+              - field: dueDate
+                code: invalid_format
+                message: Tanggal tidak dikenali.
+
+    RateLimited:
+      description: |
+        Melewati batas percobaan. Login 5 per 15 menit; tulis 100/menit; baca
+        300/menit; ekspor 5/jam.
+
+        Penghitungnya ada di tabel `rate_limit_keys` di Postgres, bukan di memori
+        proses (keputusan 43). Penghitung in-memory akan tampak berfungsi saat
+        diuji dan gagal saat dipakai: setiap instans serverless punya memorinya
+        sendiri, sehingga batas sebenarnya adalah batas dikali jumlah instans.
+      headers:
+        Retry-After:
+          description: Detik sampai boleh mencoba lagi.
+          schema: { type: integer }
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+
+  schemas:
+
+    # ───────────────────────────────────────────────────────────────────────
+    # Bentuk umum
+    # ───────────────────────────────────────────────────────────────────────
+
+    Problem:
+      type: object
+      description: |
+        RFC 7807 (`PRD-REVAMP.md` §7.5). Seluruh error berbentuk ini — tidak ada
+        controller yang menyusun bentuk errornya sendiri, karena bentuk yang
+        bersaing berarti frontend harus menebak.
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+          format: uri
+          description: |
+            URI yang menunjuk ke penjelasan jenis masalah ini. Dibentuk dari
+            `API_PUBLIC_URL` (keputusan 38), sehingga pindah domain tidak
+            menuntut apa pun ditulis ulang.
+        title:
+          type: string
+          description: Ringkasan singkat dan stabil. Boleh ditampilkan ke pengguna.
+        status: { type: integer, minimum: 400, maximum: 599 }
+        detail:
+          type: string
+          description: |
+            Penjelasan kejadian ini. **Tidak pernah memuat detail internal** —
+            nama tabel, potongan SQL, jejak tumpukan. Pada `500`, field ini
+            dihilangkan sama sekali.
+        instance: { type: string, description: Path request yang gagal. }
+        requestId:
+          type: string
+          description: |
+            Untuk menghubungkan keluhan dengan log.
+
+            Berguna **hanya dalam satu jam**: retensi log Vercel adalah 1 jam
+            (`PRD-REVAMP.md` §6.2). Di luar rentang itu ia tidak menunjuk apa
+            pun, dan itu batas yang harus disadari, bukan ditemukan saat
+            dibutuhkan.
+        code:
+          type: string
+          description: |
+            Kode mesin yang stabil, untuk dipetakan frontend. Berbeda dari
+            `title` yang boleh berubah kata-katanya, `code` tidak pernah berubah
+            artinya.
+      additionalProperties: true
+
+    ValidationProblem:
+      allOf:
+        - $ref: '#/components/schemas/Problem'
+        - type: object
+          required: [errors]
+          properties:
+            code: { type: string, const: validation_failed }
+            errors:
+              type: array
+              description: Satu entri per field yang gagal.
+              items: { $ref: '#/components/schemas/ValidationError' }
+
+    ValidationError:
+      type: object
+      required: [field, code, message]
+      properties:
+        field:
+          type: string
+          description: |
+            Jalur field, bertitik untuk yang bersarang (`extraFields.accountNumber`).
+            Kosong untuk kegagalan yang tidak terikat field tertentu.
+        code:
+          type: string
+          description: Kode mesin dari pemeriksaannya, mis. `invalid_format`, `too_small`.
+        message:
+          type: string
+          description: Kalimat bahasa Indonesia untuk ditampilkan di sebelah isiannya.
+
+    PageMeta:
+      type: object
+      required: [hasMore]
+      properties:
+        nextCursor:
+          type: [string, 'null']
+          description: |
+            Ada kalau `hasMore` true. Opaque — klien mengirimnya kembali apa
+            adanya. Menyusunnya sendiri berarti bergantung pada bentuk dalam
+            yang boleh berubah kapan saja.
+        hasMore: { type: boolean }
+
+    # ───────────────────────────────────────────────────────────────────────
+    # Aktor & kosakata
+    # ───────────────────────────────────────────────────────────────────────
+
+    Role:
+      type: string
+      description: |
+        Lima peran (keputusan 46), bukan empat. `division_deputy` memegang
+        **seluruh** hak `division_head` untuk sekarang; ia berdiri sendiri supaya
+        wewenangnya bisa dipisah nanti tanpa migrasi data.
+
+        Label yang dilihat pengguna tetap "Kadiv" dan "Wakil Kadiv" — dictionary
+        frontend yang menerjemahkannya, bukan backend.
+      enum: [owner, co_owner, division_head, division_deputy, member]
+
+    MemberStatus:
+      type: string
+      description: |
+        Anggota aktif adalah `active`. **`invited` bukan anggota aktif** dan
+        tidak punya akses apa pun — di `sksks` ia terhitung aktif karena
+        definisinya `status <> 'nonaktif'` (temuan #1).
+      enum: [invited, active, inactive]
+
+    WorkStatus:
+      type: string
+      description: |
+        Status pekerjaan, keputusan rapat, dan milestone.
+
+        Delapan nilai. `diarsipkan` yang ada di `sksks` **dibuang**: menyembunyikan
+        baris adalah urusan kolom `archivedAt`, bukan urusan status (§14.2).
+      enum: [draft, submitted, approved, in_progress, need_review, on_hold, done, rejected]
+
+    WorkItemType:
+      type: string
+      enum:
+        - task
+        - request
+        - meeting_follow_up
+        - program_need
+        - division_need
+        - milestone
+        - evaluation_follow_up
+        - subunit_need
+
+    RequestStatus:
+      type: string
+      description: |
+        Sembilan nilai. **`need_clarification` berdiri sendiri** dan tidak pernah
+        dipetakan ke `need_review` (temuan #5): yang satu berarti "sudah jadi,
+        menunggu dinilai", yang lain berarti "belum bisa jalan".
+      enum: [draft, submitted, accepted, in_progress, need_review, need_clarification, on_hold, done, rejected]
+
+    RequestType:
+      type: string
+      description: Empat belas jenis permintaan. `program_need` muncul di dua enum — di sini dan di `WorkItemType`.
+      enum:
+        - correspondence
+        - budget_plan
+        - design
+        - video_editing
+        - publication
+        - documentation
+        - goods_procurement
+        - goods_loan
+        - transportation
+        - cargo
+        - catering
+        - sponsorship
+        - program_need
+        - general_assistance
+
+    PriorityLevel:
+      type: string
+      enum: [urgent, high, medium, low]
+
+    Actor:
+      type: object
+      description: Siapa yang sedang masuk.
+      required: [id, email, roles, mustChangePassword]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: '`profiles.id` — bukan id di penyedia identitas.'
+        email: { type: string, format: email }
+        fullName: { type: [string, 'null'] }
+        roles:
+          type: array
+          items: { $ref: '#/components/schemas/Role' }
+          description: |
+            Array, bukan satu nilai (keputusan 52) — satu orang bisa menjadi
+            kepala divisi sekaligus anggota di divisi lain.
+        divisionCodes:
+          type: array
+          items: { type: string }
+          description: |
+            Kode divisi yang **dinaungi** — terisi hanya untuk `division_head`
+            dan `division_deputy`. Anggota biasa di divisi Sekretaris &
+            Bendahara **tidak** mengisi ini, dan justru itu yang membuat
+            pemeriksaan keuangan benar.
+        mustChangePassword:
+          type: boolean
+          description: |
+            Kalau true, **seluruh endpoint selain jalur ganti-password ditolak**.
+            Penegakannya di backend, bukan di UI: kalau hanya frontend yang
+            menahan, satu `curl` dengan token yang sah sudah cukup melewatinya
+            (keputusan 10).
+        mustChangePasswordExempt:
+          type: array
+          items: { type: string }
+          description: Policy yang tetap boleh dipakai saat penanda itu menyala.
+
+    # ───────────────────────────────────────────────────────────────────────
+    # Health
+    # ───────────────────────────────────────────────────────────────────────
+
+    Health:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, const: ok }
+        uptimeSeconds: { type: number }
+        version: { type: string }
+      description: Liveness. Tidak memuat status database — itu tugas `/health/ready`.
+
+    Readiness:
+      type: object
+      required: [status, checks]
+      properties:
+        status: { type: string, enum: [ready, not_ready] }
+        checks:
+          type: object
+          properties:
+            database: { type: string, enum: [up, down] }
+      description: |
+        `503` kalau `database` bernilai `down`. Isinya sengaja sesingkat ini:
+        readiness yang menyebutkan detail koneksi memberi tahu penyerang lebih
+        banyak daripada yang diberitahukannya kepada operator.
+
+    # ───────────────────────────────────────────────────────────────────────
+    # Auth
+    # ───────────────────────────────────────────────────────────────────────
+
+    GoogleLoginRequest:
+      type: object
+      required: [email, emailVerified, sub]
+      properties:
+        email: { type: string, format: email }
+        emailVerified:
+          type: boolean
+          description: |
+            Wajib `true`. Kalau penyedia pernah mengembalikan email yang belum
+            terverifikasi, orang bisa mengklaim email orang lain — dan itu
+            membatalkan sifat tertutup sistem ini.
+        sub:
+          type: string
+          description: |
+            Klaim `sub` dari penyedia identitas, bukan email. Email bisa berubah;
+            `sub` stabil. Setelah login pertama, pencocokan lewat sini — yang
+            menutup skenario email lama dipakai ulang orang lain.
+        fullName: { type: [string, 'null'] }
+        avatarUrl: { type: [string, 'null'], format: uri }
+
+    PasswordLoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, minLength: 1, writeOnly: true }
+
+    ChangePasswordRequest:
+      type: object
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword: { type: string, writeOnly: true }
+        newPassword:
+          type: string
+          minLength: 12
+          writeOnly: true
+          description: Minimal 12 karakter. Diperiksa dengan argon2id.
+
+    AuthResult:
+      type: object
+      required: [actor, accessToken]
+      properties:
+        actor: { $ref: '#/components/schemas/Actor' }
+        accessToken:
+          type: string
+          writeOnly: true
+          description: |
+            JWT, umur 15 menit. BFF menyimpannya di cookie `httpOnly`; token ini
+            **tidak pernah** sampai ke JavaScript.
+        expiresIn: { type: integer, description: Detik. }
+
+    # ───────────────────────────────────────────────────────────────────────
+    # Kolom bersama
+    # ───────────────────────────────────────────────────────────────────────
+
+    RowAudit:
+      type: object
+      description: Jejak baris, ada di hampir setiap resource.
+      properties:
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        createdBy: { type: [string, 'null'], format: uuid }
+        updatedBy: { type: [string, 'null'], format: uuid }
+        archivedAt:
+          type: [string, 'null']
+          format: date-time
+          description: |
+            Disembunyikan dari daftar aktif, **tetapi bukan sampah** — barisnya
+            utuh dan biasa dibaca.
+        deletedAt:
+          type: [string, 'null']
+          format: date-time
+          description: |
+            Sampah. Ada di recycle bin dan bisa dipulihkan; hilang dari seluruh
+            daftar sampai dipulihkan.
+
+            `deletedAt` dan `archivedAt` **tidak pernah** dipakai bersamaan untuk
+            hal yang sama (§14.2). Di `sksks` ada tiga mekanisme penyembunyian
+            yang tumpang tindih; yang ketiga — nilai status `diarsipkan` — sudah
+            dibuang.
+
+    # ───────────────────────────────────────────────────────────────────────
+    # Pekerjaan
+    # ───────────────────────────────────────────────────────────────────────
+
+    WorkItem:
+      type: object
+      required: [id, workNumber, title, type, status, priority, version, availableTransitions]
+      properties:
+        id: { type: string, format: uuid }
+        workNumber:
+          type: string
+          pattern: '^WI-\d{4}-\d{5}$'
+          description: |
+            Dihasilkan backend lewat tabel penghitung di dalam transaksi yang sama
+            dengan INSERT-nya. **Tanpa celah** — `nextval()` memberi celah setiap
+            kali transaksi bergulung balik, sedangkan ini nomor dokumen yang orang
+            rujuk (`PRD-BACKEND.md` §8.2).
+          examples: ['WI-2026-00001']
+        title: { type: string, minLength: 1, maxLength: 200 }
+        type: { $ref: '#/components/schemas/WorkItemType' }
+        description: { type: [string, 'null'] }
+        status: { $ref: '#/components/schemas/WorkStatus' }
+        priority: { $ref: '#/components/schemas/PriorityLevel' }
+        moduleStatus:
+          type: [string, 'null']
+          description: |
+            Status tambahan milik modul pemakainya — teks bebas, bukan enum. Ia
+            **tidak** menggantikan `status`, dan tidak pernah dipakai untuk
+            menentukan hak akses.
+        progressPercentage: { type: integer, minimum: 0, maximum: 100 }
+        startDate: { type: [string, 'null'], format: date }
+        dueDate: { type: [string, 'null'], format: date }
+        completedAt:
+          type: [string, 'null']
+          format: date-time
+          description: Diisi otomatis saat status menjadi `done`.
+        divisionId: { type: [string, 'null'], format: uuid }
+        clusterId: { type: [string, 'null'], format: uuid }
+        subunitId: { type: [string, 'null'], format: uuid }
+        programId: { type: [string, 'null'], format: uuid }
+        periodId: { type: [string, 'null'], format: uuid }
+        primaryPicId:
+          type: [string, 'null']
+          format: uuid
+          description: |
+            `null` berarti belum ada penanggung jawab — dan pekerjaan seperti itu
+            boleh diklaim anggota mana pun lewat `/work-items/{id}/pic`.
+        assigneeIds:
+          type: array
+          items: { type: string, format: uuid }
+          description: Penerima tugas selain PIC. Ditambahkan dan dicabut bebas, tetapi hanya di dalam divisi sendiri (keputusan 44).
+        blockerReason: { type: [string, 'null'] }
+        assistanceNeeded: { type: [string, 'null'] }
+        completionSummary:
+          type: [string, 'null']
+          description: Wajib saat status `done` — dijaga `CHECK` di database juga.
+        holdReason:
+          type: [string, 'null']
+          description: |
+            Wajib saat status `on_hold` (keputusan 48). Di `sksks` status ini
+            dipasang trigger dengan nilai yang tidak berasal dari isian siapa
+            pun; alasan wajib inilah yang membedakan "tertahan karena sesuatu"
+            dari "tidak ada yang mengerjakan".
+        sourceRequestId:
+          type: [string, 'null']
+          format: uuid
+          description: Permintaan yang melahirkan pekerjaan ini.
+        sourceMeetingDecisionId: { type: [string, 'null'], format: uuid }
+        syncConflictAt:
+          type: [string, 'null']
+          format: date-time
+          description: |
+            Terisi kalau pekerjaan ini dan permintaan asalnya tidak lagi sepakat
+            (keputusan 49). Selama terisi, **transisi status ditolak bagi semua
+            peran**, termasuk owner.
+        syncConflictNote: { type: [string, 'null'] }
+        isRecurring: { type: boolean }
+        recurrenceRule: { type: [string, 'null'] }
+        version:
+          type: integer
+          minimum: 1
+          description: Optimistic locking. Dikirim kembali sebagai `If-Match`.
+        availableTransitions:
+          type: array
+          items: { $ref: '#/components/schemas/WorkStatus' }
+          description: |
+            Status yang **sah bagi aktor ini** pada baris ini. Frontend tidak
+            punya pilihan selain memakainya, dan itu tujuannya: state machine
+            tidak bisa lagi hidup hanya di UI (§5.2.2).
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        archivedAt: { type: [string, 'null'], format: date-time }
+        deletedAt: { type: [string, 'null'], format: date-time }
+
+    WorkItemCreate:
+      type: object
+      required: [title]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 200 }
+        type: { $ref: '#/components/schemas/WorkItemType' }
+        description: { type: [string, 'null'] }
+        priority: { $ref: '#/components/schemas/PriorityLevel' }
+        divisionId: { type: [string, 'null'], format: uuid }
+        clusterId: { type: [string, 'null'], format: uuid }
+        subunitId: { type: [string, 'null'], format: uuid }
+        programId: { type: [string, 'null'], format: uuid }
+        periodId: { type: [string, 'null'], format: uuid }
+        startDate: { type: [string, 'null'], format: date }
+        dueDate: { type: [string, 'null'], format: date }
+        isRecurring: { type: boolean }
+        recurrenceRule: { type: [string, 'null'] }
+      description: |
+        `workNumber`, `status`, `version`, dan `progressPercentage` **tidak
+        boleh dikirim**. Nomor dihasilkan backend; status selalu mulai dari
+        `draft`; versi dipegang server. Mengirimnya diabaikan, bukan ditolak —
+        supaya klien yang menyimpan lalu mengirim ulang objek utuh tidak gagal
+        karena field yang memang bukan urusannya.
+
+    WorkItemPatch:
+      type: object
+      minProperties: 1
+      properties:
+        title: { type: string, minLength: 1, maxLength: 200 }
+        type: { $ref: '#/components/schemas/WorkItemType' }
+        description: { type: [string, 'null'] }
+        priority: { $ref: '#/components/schemas/PriorityLevel' }
+        moduleStatus: { type: [string, 'null'] }
+        progressPercentage: { type: integer, minimum: 0, maximum: 100 }
+        divisionId: { type: [string, 'null'], format: uuid }
+        clusterId: { type: [string, 'null'], format: uuid }
+        subunitId: { type: [string, 'null'], format: uuid }
+        programId: { type: [string, 'null'], format: uuid }
+        startDate: { type: [string, 'null'], format: date }
+        dueDate: { type: [string, 'null'], format: date }
+        blockerReason: { type: [string, 'null'] }
+        assistanceNeeded: { type: [string, 'null'] }
+        completionSummary: { type: [string, 'null'] }
+        holdReason: { type: [string, 'null'] }
+      description: |
+        `status` **tidak ada di sini** meskipun kolomnya ada di database.
+        Memindahkan status lewat `PATCH` berarti satu operasi bermakna
+        bercampur dengan operasi biasa, dan aturannya — transisi apa yang sah,
+        siapa yang boleh, field apa yang wajib — ikut bercampur juga.
+
+    SetPicRequest:
+      type: object
+      required: [primaryPicId]
+      properties:
+        primaryPicId:
+          type: [string, 'null']
+          format: uuid
+          description: |
+            `null` mengosongkan PIC. Hanya pemimpin divisi dan owner/co-owner
+            yang boleh mengosongkan; anggota hanya boleh **mengisi**.
+
+    WorkItemTransitionRequest:
+      type: object
+      required: [to]
+      properties:
+        to: { $ref: '#/components/schemas/WorkStatus' }
+        holdReason:
+          type: [string, 'null']
+          description: Wajib kalau `to` adalah `on_hold` (keputusan 48).
+        completionSummary:
+          type: [string, 'null']
+          description: Wajib kalau `to` adalah `done`.
+        blockerReason: { type: [string, 'null'] }
+        assistanceNeeded: { type: [string, 'null'] }
+        note:
+          type: [string, 'null']
+          description: Catatan bebas, tersimpan di riwayat status.
+
+    WorkItemPage:
+      allOf:
+        - type: object
+          required: [data, meta]
+          properties:
+            data:
+              type: array
+              items: { $ref: '#/components/schemas/WorkItem' }
+            meta: { $ref: '#/components/schemas/PageMeta' }
+
+    # ───────────────────────────────────────────────────────────────────────
+    # Permintaan
+    # ───────────────────────────────────────────────────────────────────────
+
+    Request:
+      type: object
+      required: [id, requestNumber, title, type, status, priority, version, availableTransitions]
+      properties:
+        id: { type: string, format: uuid }
+        requestNumber:
+          type: string
+          pattern: '^REQ-\d{4}-\d{5}$'
+          examples: ['REQ-2026-00001']
+        title: { type: string, minLength: 1, maxLength: 200 }
+        type: { $ref: '#/components/schemas/RequestType' }
+        description: { type: [string, 'null'] }
+        status: { $ref: '#/components/schemas/RequestStatus' }
+        priority: { $ref: '#/components/schemas/PriorityLevel' }
+        requesterId: { type: [string, 'null'], format: uuid }
+        requesterDivisionId: { type: [string, 'null'], format: uuid }
+        targetDivisionId:
+          type: string
+          format: uuid
+          description: |
+            Divisi **tujuan**, dan inilah yang menentukan siapa yang boleh
+            memindahkan statusnya. Tidak bisa `null`: permintaan tanpa divisi
+            tujuan tidak berarti apa-apa.
+        assignedPicId: { type: [string, 'null'], format: uuid }
+        programId: { type: [string, 'null'], format: uuid }
+        subunitId: { type: [string, 'null'], format: uuid }
+        periodId: { type: [string, 'null'], format: uuid }
+        dueDate: { type: [string, 'null'], format: date }
+        extraFields:
+          type: object
+          description: |
+            Kolom per jenis permintaan — nomor rekening untuk RAB, ukuran untuk
+            desain. Divalidasi skema per jenis, bukan dibiarkan bebas.
+          additionalProperties: true
+        clarificationNote:
+          type: [string, 'null']
+          description: Wajib saat status `need_clarification`.
+        resultSummary: { type: [string, 'null'] }
+        holdReason: { type: [string, 'null'] }
+        completedAt: { type: [string, 'null'], format: date-time }
+        linkedWorkItemId:
+          type: [string, 'null']
+          format: uuid
+          description: |
+            Pekerjaan yang lahir dari permintaan ini. Diisi **saat permintaan
+            diajukan**, bukan saat disimpan sebagai draft (temuan #7).
+        syncConflictAt:
+          type: [string, 'null']
+          format: date-time
+          description: |
+            Terisi saat sinkronisasi dua arah menemukan kedua sisi tidak lagi
+            sepakat (keputusan 49). Selama terisi, transisi status ditolak —
+            konflik diselesaikan, bukan dilewati.
+        syncConflictNote: { type: [string, 'null'] }
+        version: { type: integer, minimum: 1 }
+        availableTransitions:
+          type: array
+          items: { $ref: '#/components/schemas/RequestStatus' }
+          description: Status yang sah bagi aktor ini pada baris ini.
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        archivedAt: { type: [string, 'null'], format: date-time }
+        deletedAt: { type: [string, 'null'], format: date-time }
+
+    RequestCreate:
+      type: object
+      required: [title, type, targetDivisionId]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 200 }
+        type: { $ref: '#/components/schemas/RequestType' }
+        description: { type: [string, 'null'] }
+        targetDivisionId: { type: string, format: uuid }
+        priority: { $ref: '#/components/schemas/PriorityLevel' }
+        programId: { type: [string, 'null'], format: uuid }
+        subunitId: { type: [string, 'null'], format: uuid }
+        periodId: { type: [string, 'null'], format: uuid }
+        dueDate: { type: [string, 'null'], format: date }
+        extraFields: { type: object, additionalProperties: true }
+
+    RequestPatch:
+      type: object
+      minProperties: 1
+      properties:
+        title: { type: string, minLength: 1, maxLength: 200 }
+        type: { $ref: '#/components/schemas/RequestType' }
+        description: { type: [string, 'null'] }
+        targetDivisionId: { type: string, format: uuid }
+        priority: { $ref: '#/components/schemas/PriorityLevel' }
+        programId: { type: [string, 'null'], format: uuid }
+        subunitId: { type: [string, 'null'], format: uuid }
+        dueDate: { type: [string, 'null'], format: date }
+        extraFields: { type: object, additionalProperties: true }
+        assignedPicId: { type: [string, 'null'], format: uuid }
+
+    RequestTransitionRequest:
+      type: object
+      required: [to]
+      properties:
+        to: { $ref: '#/components/schemas/RequestStatus' }
+        clarificationNote:
+          type: [string, 'null']
+          description: Wajib kalau `to` adalah `need_clarification` — dan wajib berisi, bukan string kosong.
+        resultSummary:
+          type: [string, 'null']
+          description: Wajib kalau `to` adalah `done`.
+        holdReason:
+          type: [string, 'null']
+          description: Wajib kalau `to` adalah `on_hold` (keputusan 48).
+        note: { type: [string, 'null'] }
+
+    RequestPage:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/Request' }
+        meta: { $ref: '#/components/schemas/PageMeta' }

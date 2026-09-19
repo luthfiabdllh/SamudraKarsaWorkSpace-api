@@ -13,35 +13,96 @@ import type { Role } from '../common/types/roles';
  * Policy yang bisa diputuskan **hanya dari peran** — tidak perlu melihat baris
  * yang bersangkutan lebih dulu.
  *
- * `kadiv` di sini berarti "kadiv mana pun". Batasan "kadiv **divisinya**"
- * tidak bisa dinyatakan di tabel ini karena jawabannya bergantung pada isi
- * barisnya — policy seperti itu ada di `RESOURCE_POLICY_NAMES` di bawah.
+ * `division_head` di sini berarti "kepala divisi mana pun". Batasan "kepala
+ * divisi **baris ini**" tidak bisa dinyatakan di tabel ini karena jawabannya
+ * bergantung pada isi barisnya — policy seperti itu ada di
+ * `RESOURCE_POLICY_NAMES` di bawah.
+ *
+ * ## `division_deputy` selalu sebaris dengan `division_head`
+ *
+ * Setiap baris yang memuat `division_head` memuat `division_deputy` juga, dan
+ * itu disengaja. `sksks` memperlakukan keduanya identik lewat
+ * `is_division_lead()`, dan keputusan 46 mempertahankan wakil kepala divisi
+ * sebagai peran tersendiri tanpa memberinya wewenang berbeda **untuk
+ * sekarang** (lihat `roles.ts`).
+ *
+ * Karena itu: kalau suatu saat salah satu baris di bawah diubah, ubah
+ * `division_head` dan `division_deputy` bersama-sama — kecuali memang sedang
+ * sengaja memisahkan wewenang keduanya. Baris yang hanya memuat salah satunya
+ * adalah tanda ada yang terlewat, bukan tanda keputusan.
  */
 export const ROLE_POLICY_MATRIX = {
   // Pekerjaan — PRD-REVAMP §7.9
-  'work-item:read': ['owner', 'co_owner', 'kadiv', 'member'],
-  'work-item:create': ['owner', 'co_owner', 'kadiv', 'member'],
-  'work-item:delete': ['owner', 'co_owner', 'kadiv'],
+  'work-item:read': [
+    'owner',
+    'co_owner',
+    'division_head',
+    'division_deputy',
+    'member',
+  ],
+  'work-item:create': [
+    'owner',
+    'co_owner',
+    'division_head',
+    'division_deputy',
+    'member',
+  ],
+  'work-item:delete': ['owner', 'co_owner', 'division_head', 'division_deputy'],
 
   // Request
-  'request:read': ['owner', 'co_owner', 'kadiv', 'member'],
-  'request:create': ['owner', 'co_owner', 'kadiv', 'member'],
+  'request:read': [
+    'owner',
+    'co_owner',
+    'division_head',
+    'division_deputy',
+    'member',
+  ],
+  'request:create': [
+    'owner',
+    'co_owner',
+    'division_head',
+    'division_deputy',
+    'member',
+  ],
 
   // Keuangan — `finance:export` sengaja lebih sempit daripada `finance:read`.
   // Dua baris di §7.9 memang berbeda, dan perbedaannya dipertahankan di sini.
   'finance:export': ['owner', 'co_owner'],
 
   // Pengumuman
-  'announcement:create': ['owner', 'co_owner', 'kadiv'],
+  'announcement:create': [
+    'owner',
+    'co_owner',
+    'division_head',
+    'division_deputy',
+  ],
 
   // Administrasi
   'member:admin': ['owner', 'co_owner'],
   'audit:read': ['owner', 'co_owner'],
 
   // Auth — juga dipakai daftar pengecualian must_change_password di bawah
-  'auth:session': ['owner', 'co_owner', 'kadiv', 'member'],
-  'auth:change-password': ['owner', 'co_owner', 'kadiv', 'member'],
-  'auth:logout': ['owner', 'co_owner', 'kadiv', 'member'],
+  'auth:session': [
+    'owner',
+    'co_owner',
+    'division_head',
+    'division_deputy',
+    'member',
+  ],
+  'auth:change-password': [
+    'owner',
+    'co_owner',
+    'division_head',
+    'division_deputy',
+    'member',
+  ],
+  'auth:logout': [
+    'owner',
+    'co_owner',
+    'division_head',
+    'division_deputy',
+    'member',
+  ],
 } as const satisfies Record<string, readonly Role[]>;
 
 export type RolePolicyName = keyof typeof ROLE_POLICY_MATRIX;
@@ -51,20 +112,54 @@ export type RolePolicyName = keyof typeof ROLE_POLICY_MATRIX;
  * mana, siapa PIC-nya. Ini tidak bisa menjadi data di tabel atas karena
  * jawabannya bergantung pada isi database.
  *
- * Implementasinya ada di paket `@samudrakarsa/shared` (`canEditWorkItem`,
- * `canChangePic`, `canTransitionRequest` — `PRD-REVAMP.md` §7.9), supaya
- * frontend dan backend memakai fungsi yang sama persis dan tidak ada dua
- * tafsir atas aturan yang sama.
+ * Implementasinya ada di `resource.ts` di folder ini, dan nanti pindah ke paket
+ * `@samudrakarsa/shared` (`PRD-REVAMP.md` §7.9), supaya frontend dan backend
+ * memakai fungsi yang sama persis dan tidak ada dua tafsir atas aturan yang sama.
  *
- * **Sampai paket itu ada, `PolicyGuard` menolak policy jenis ini.** Menolak
- * adalah default yang benar: kalau belum bisa memutuskan, jawabannya bukan
- * "boleh".
+ * | Nama policy | Fungsi |
+ * |---|---|
+ * | `work-item:update` | `canEditWorkItem` |
+ * | `work-item:delete` | `canDeleteWorkItem` |
+ * | `work-item:set-pic` | `canChangePic` |
+ * | `work-item:transition` | `canTransitionWorkItem` |
+ * | `request:transition` | `canTransitionRequest` |
+ * | `finance:read` | `canReadFinance` |
+ * | `feedback:read-own` | `canReadFeedback` |
+ *
+ * Dua catatan tentang daftar di atas:
+ *
+ * - **`finance:export` tidak ada di sini** meskipun ia terdengar seperti policy
+ *   resource-scoped. Ia ada di tabel peran di atas, dan itu benar: §7.9
+ *   memberinya `owner`/`co_owner` saja, tanpa syarat apa pun tentang barisnya.
+ * - **`work-item:transition` tidak ada barisnya di §7.9**, karena tabel itu
+ *   ditulis sebelum endpoint transisi ada (`PRD-BACKEND.md` §12 Fase 3). Ia
+ *   mengikuti wewenang `work-item:update` ditambah penutupan karena konflik
+ *   sinkronisasi (keputusan 49). Ini **penambahan**, bukan pertentangan.
+ *
+ * **`division_deputy` wajib ikut di sini juga.** Di sinilah ia paling mudah
+ * hilang: tabel di atas hanya memuat peran, sehingga `division_deputy`
+ * terlihat jelas, tetapi fungsi-fungsi ini memeriksa "apakah aktor kepala
+ * divisi **baris ini**" — dan jawabannya harus `division_head` **atau**
+ * `division_deputy` dari divisi yang sama, persis seperti
+ * `is_division_lead()` di `sksks`. Fungsi yang hanya memeriksa
+ * `division_head` akan diam-diam mencabut wewenang seluruh wakil kepala
+ * divisi, tanpa error dan tanpa jejak. Karena itu `resource.ts` memusatkan
+ * pemeriksaan itu di `DIVISION_LEAD_ROLES` dan `isDivisionLead()`, dan
+ * `resource.spec.ts` menguji setiap fungsi dengan aktor `division_deputy`.
+ *
+ * **Sampai paket `@samudrakarsa/shared` ada, `PolicyGuard` menolak policy jenis
+ * ini.** Menolak adalah default yang benar: kalau belum bisa memutuskan,
+ * jawabannya bukan "boleh". Yang hilang hanyalah pemeriksaan per baris di
+ * guard — service yang memanggil fungsi di `resource.ts` sudah bisa
+ * memutuskannya sendiri.
  */
 export const RESOURCE_POLICY_NAMES = [
   'work-item:update',
+  'work-item:delete',
   'work-item:set-pic',
-  'finance:read',
+  'work-item:transition',
   'request:transition',
+  'finance:read',
   'feedback:read-own',
 ] as const;
 
