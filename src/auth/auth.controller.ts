@@ -14,6 +14,7 @@ import { CurrentActor } from '../common/decorators/current-actor.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { clientIp, readCookie } from '../common/http/request-context';
 import type { AuthenticatedUser } from '../common/types/express';
+import { SkipIdempotency } from '../idempotency/skip-idempotency.decorator';
 import { PENDING_PASSWORD_EXEMPT } from '../policy/matrix';
 import { Policy } from '../policy/policy.decorator';
 import { REFRESH_COOKIE_NAME } from './auth.constants';
@@ -87,7 +88,19 @@ export interface SessionResult {
  *
  * `auth:logout` juga ada di `PENDING_PASSWORD_EXEMPT`, dan pengecualian itu
  * hanya berarti kalau rutenya memang terjaga.
+ *
+ * ## Kenapa seluruh kelas ini dikecualikan dari penyimpanan idempotensi
+ *
+ * Karena `idempotency_keys.response_body` menyimpan jawaban apa adanya, dan
+ * jawaban di sini berisi access token dan refresh token. Menyimpannya berarti
+ * token yang masih berlaku tinggal di tabel selama dua puluh empat jam.
+ * Rinciannya di `SkipIdempotency`.
+ *
+ * Ditaruh di kelasnya, bukan di tiga rute yang berbadan, supaya tidak ada rute
+ * baru di controller ini yang bisa lupa ditandai. Rute yang tidak menyimpan
+ * apa-apa tetap aman kalau ikut dikecualikan; rute yang menyimpan token tidak.
  */
+@SkipIdempotency()
 @Controller('auth')
 export class AuthController {
   constructor(private readonly auth: AuthService) {}

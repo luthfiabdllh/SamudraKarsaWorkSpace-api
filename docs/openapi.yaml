@@ -2,10 +2,30 @@ openapi: 3.1.0
 
 info:
   title: SamudraKarsa Work Space API
-  version: 1.0.0-draft
-  summary: Kontrak Fase 1 — ditulis sebelum satu baris implementasi.
+  version: 1.1.0-draft
+  summary: Kontrak REST — sebagian ditulis sebelum implementasi, sebagian sesudahnya.
   description: |
     Kontrak REST untuk backend `SamudraKarsaWorkSpace-api`.
+
+    ## Soal urutan penulisan — dan satu deviasi yang dicatat terus terang
+
+    `PRD-BACKEND.md` §12 Fase 1 meminta kontrak ini selesai **sebelum** satu
+    baris implementasi. Untuk `health`, `auth`, `work-items`, dan `requests`,
+    urutan itu dipatuhi. Untuk `organization`, `profiles`, dan
+    `POST /requests/{id}/sync-conflict`, **tidak** — ketiganya baru ditulis
+    setelah modulnya dibangun di Fase 3.
+
+    Itu deviasi yang diketahui, dan ia dicatat di sini alih-alih ditutupi.
+
+    Yang hilang karenanya nyata: manfaat "memaksa keputusan diambil saat masih
+    murah". Bagian-bagian itu adalah **deskripsi atas apa yang sudah ada**,
+    bukan perancangan atas apa yang akan ada — menamai field dan memilih status
+    code-nya sudah tidak gratis lagi, karena kodenya sudah bergantung padanya.
+
+    Yang **tidak** hilang, dan inilah alasan bagian-bagian itu tetap ditulis:
+    berkas ini satu-satunya tempat bentuk API bisa ditinjau sebagai satu
+    kesatuan. Tanpa itu, `organization` dan `profiles` hanya bisa diketahui
+    dengan membaca controller-nya satu per satu.
 
     ## Kenapa berkas ini ditulis tangan
 
@@ -28,8 +48,8 @@ info:
 
     ## Cakupan berkas ini
 
-    Lengkap untuk fondasi dan untuk dua domain yang dibangun pertama di Fase 3:
-    `health`, `auth`, `work-items`, `requests`.
+    Lengkap untuk fondasi dan untuk **seluruh** Fase 3: `health`, `auth`,
+    `organization`, `profiles`, `work-items`, `requests`.
 
     Sembilan belas modul sisanya **belum ada di sini**, dan itu bukan kelalaian:
     kontrak yang menebak bentuk endpoint yang aturannya belum ditulis akan
@@ -38,7 +58,7 @@ info:
 
     | Fase | Modul yang ditambahkan ke berkas ini |
     |---|---|
-    | 3 | `organization`, `profiles` (path-nya menyusul; `work-items` dan `requests` sudah ada) |
+    | 3 | `organization`, `profiles`, `work-items`, `requests` — ✅ lengkap |
     | 4 | `letters`, `finance`, `dues`, `content`, `creative`, `partners`, `inventory`, `logistics` |
     | 5 | `meetings`, `calendar`, `milestones`, `announcements`, `feedback`, `notifications`, `attachments` |
     | 6 | `audit`, `reports`, `recycle-bin`, `settings` |
@@ -97,6 +117,32 @@ tags:
     description: Pekerjaan — membuat, mengubah, menugaskan, memindahkan status.
   - name: requests
     description: Permintaan lintas divisi dan transisi statusnya.
+  - name: organization
+    description: |
+      Data acuan organisasi: periode, divisi, cluster, subunit.
+
+      Seluruh rutenya dijaga `organization:read` (semua yang sudah masuk) atau
+      `organization:write` (`owner`/`co_owner` saja). Tidak ada penyaringan per
+      peran di dalamnya, jadi tidak ada bentuk jawaban yang bergantung pada
+      siapa yang bertanya.
+
+      **Tidak ada penguncian optimistis di sini.** Keempat tabel ini tidak punya
+      kolom `version`, dan tidak ada satu pun operasi di bawah yang membaca
+      `If-Match`. Yang menggantikannya adalah indeks unik untuk kode dan
+      pemeriksaan rujukan sebelum menghapus.
+  - name: profiles
+    description: |
+      Anggota: profil diri sendiri, direktori anggota, dan administrasi anggota
+      oleh `owner`/`co_owner`.
+
+      Dua bentuk jawaban yang **sengaja tidak disatukan** — `ProfileDirectory`
+      untuk yang boleh dibaca siapa saja yang sudah masuk, dan `ProfileFull`
+      untuk diri sendiri serta halaman admin. Menyatukannya dengan penyaring
+      peran berarti satu cabang `if` yang terbalik mengirim seluruh email dan
+      nomor telepon ke semua orang, tanpa error dan tanpa gejala.
+
+      `passwordHash` dan `googleSub` tidak ada di kedua bentuk itu, dan tidak
+      akan pernah ada.
 
 security:
   - bearerAuth: []
@@ -572,6 +618,8 @@ paths:
           $ref: '#/components/responses/NotFoundOrHidden'
         '409':
           $ref: '#/components/responses/VersionConflict'
+        '428':
+          $ref: '#/components/responses/IfMatchRequired'
         '422':
           $ref: '#/components/responses/ValidationFailed'
 
@@ -597,6 +645,8 @@ paths:
           $ref: '#/components/responses/NotFoundOrHidden'
         '409':
           $ref: '#/components/responses/VersionConflict'
+        '428':
+          $ref: '#/components/responses/IfMatchRequired'
 
   /work-items/{id}/pic:
     parameters:
@@ -644,6 +694,8 @@ paths:
           $ref: '#/components/responses/NotFoundOrHidden'
         '409':
           $ref: '#/components/responses/VersionConflict'
+        '428':
+          $ref: '#/components/responses/IfMatchRequired'
         '422':
           $ref: '#/components/responses/ValidationFailed'
 
@@ -696,6 +748,8 @@ paths:
           $ref: '#/components/responses/NotFoundOrHidden'
         '409':
           $ref: '#/components/responses/TransitionRejected'
+        '428':
+          $ref: '#/components/responses/IfMatchRequired'
         '422':
           $ref: '#/components/responses/ValidationFailed'
 
@@ -853,8 +907,50 @@ paths:
           $ref: '#/components/responses/NotFoundOrHidden'
         '409':
           $ref: '#/components/responses/VersionConflict'
+        '428':
+          $ref: '#/components/responses/IfMatchRequired'
         '422':
           $ref: '#/components/responses/ValidationFailed'
+
+    delete:
+      tags: [requests]
+      operationId: deleteRequest
+      summary: Menghapus permintaan (soft)
+      description: |
+        Soft delete — mengisi `deletedAt`. Barisnya masuk recycle bin dan bisa
+        dipulihkan; ia **hilang dari seluruh daftar** sampai dipulihkan.
+
+        `deleted_at`, bukan `DELETE FROM`: laporan yang menyebutnya akan berubah
+        angkanya tanpa penjelasan.
+
+        **Pekerjaan yang terhubung dibiarkan hidup**, dan itu disengaja. Ia
+        dokumen tersendiri dengan pekerjaannya sendiri, dan `sourceRequestId`-nya
+        tetap menunjuk baris permintaan yang masih ada — soft delete tidak
+        menghapus barisnya, jadi riwayat pekerjaannya tetap bisa ditelusuri.
+        Menghapusnya juga berarti pekerjaan yang sudah berjalan berhenti karena
+        dokumen asalnya dirapikan, dan itu bukan hubungan yang diminta siapa pun.
+
+        Policy `request:delete` (`canDeleteRequest`): `owner`, `co_owner`, dan
+        pemimpin divisi terkait. **`member` tidak**, bahkan atas permintaannya
+        sendiri — berbeda dari `PATCH`, dan perbedaan itu disengaja (§7.9):
+        menghapus satu-satunya operasi yang tidak bisa diperiksa ulang orang lain
+        setelah kejadiannya.
+
+        `If-Match` wajib: menghapus berdasarkan versi yang sudah basi berarti
+        menghapus baris yang sudah berubah sejak dibaca.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '204':
+          description: Dihapus.
+        '401':
+          $ref: '#/components/responses/NotAuthenticated'
+        '404':
+          $ref: '#/components/responses/NotFoundOrHidden'
+        '409':
+          $ref: '#/components/responses/VersionConflict'
+        '428':
+          $ref: '#/components/responses/IfMatchRequired'
 
   /requests/{id}/transitions:
     parameters:
@@ -911,6 +1007,926 @@ paths:
           $ref: '#/components/responses/TransitionRejected'
         '422':
           $ref: '#/components/responses/ValidationFailed'
+        '428':
+          $ref: '#/components/responses/IfMatchRequired'
+
+  /requests/{id}/sync-conflict:
+    parameters:
+      - $ref: '#/components/parameters/RequestId'
+
+    post:
+      tags: [requests]
+      operationId: resolveSyncConflict
+      summary: Menyelesaikan konflik sinkronisasi
+      description: |
+        Menutup konflik yang ditandai `syncConflictAt` (keputusan 49).
+
+        Selama penanda itu terisi, **transisi status ditolak bagi semua peran**,
+        termasuk `owner` — dan itulah gunanya. Pekerjaan dan permintaan asalnya
+        tidak lagi sepakat, sehingga memindahkan status di atas ketidaksepakatan
+        itu berarti memutuskan berdasarkan keadaan yang belum pernah dilihat
+        siapa pun. Rute ini satu-satunya jalan keluar.
+
+        `status` yang dikirim adalah keadaan yang **diputuskan berlaku**.
+        `note` wajib: konflik yang selesai tanpa catatan alasan akan terulang
+        tanpa ada yang tahu mengapa ia pernah ada.
+
+        Medan yang dituntut status tujuan — `clarificationNote` untuk
+        `need_clarification`, `holdReason` untuk `on_hold`, `resultSummary`
+        untuk `done` — hanya perlu dikirim kalau barisnya belum memilikinya.
+        Yang diperiksa service adalah **hasil akhirnya**, bukan ada tidaknya
+        medan di sini.
+
+        `If-Match` tetap wajib meski statusnya sedang tidak menentu — justru
+        karena keputusan ini menimpa keadaan yang belum sepakat: menyelesaikannya
+        di atas baris yang sudah bergerak lagi berarti memutuskan untuk keadaan
+        yang belum pernah dilihat siapa pun.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ResolveSyncConflictRequest' }
+      responses:
+        '200':
+          description: Konflik diselesaikan.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Request' }
+        '401':
+          $ref: '#/components/responses/NotAuthenticated'
+        '404':
+          $ref: '#/components/responses/NotFoundOrHidden'
+        '409':
+          $ref: '#/components/responses/TransitionRejected'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '428':
+          $ref: '#/components/responses/IfMatchRequired'
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Organisasi — data acuan
+  # ─────────────────────────────────────────────────────────────────────────
+  #
+  # Keempat tabel di bawah ini dibaca hampir setiap layar dan hanya ditulis
+  # owner/co_owner. Tidak satu pun memakai If-Match: keempatnya tidak punya
+  # kolom version, dan tidak ada layar yang membiarkan dua orang menyunting satu
+  # baris acuan pada saat yang sama. Yang menggantikannya adalah indeks unik
+  # untuk code dan pemeriksaan rujukan sebelum menghapus — keduanya ditegakkan
+  # database, bukan disiplin.
+
+  /organization/periods:
+    get:
+      tags: [organization]
+      operationId: listPeriods
+      summary: Daftar periode
+      description: |
+        Seluruh periode, yang paling baru dimulai lebih dulu.
+
+        **Tanpa paginasi, tanpa `limit`, tanpa `sort`** — dan itu disengaja.
+        Jumlah periode dalam satu masa kepengurusan adalah satuan, bukan
+        ratusan; memasang cursor di sini akan menambah satu bentuk jawaban yang
+        tidak pernah dipakai siapa pun.
+      responses:
+        '200':
+          description: Daftar periode.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Period' }
+        '401':
+          $ref: '#/components/responses/NotAuthenticated'
+
+    post:
+      tags: [organization]
+      operationId: createPeriod
+      summary: Membuat periode
+      description: |
+        Policy `organization:write` — hanya `owner` dan `co_owner`.
+
+        `code` dinormalisasi menjadi **huruf besar** sebelum disimpan, jadi
+        `kkn-2026-2027` dan `KKN-2026-2027` adalah periode yang sama dan yang
+        kedua ditolak `409`.
+
+        `startsOn` harus sebelum `endsOn`. Urutan terbalik ditolak `422`.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PeriodCreate' }
+      responses:
+        '201':
+          description: Dibuat.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Period' }
+        '401':
+          $ref: '#/components/responses/NotAuthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/DuplicateCode'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /organization/periods/active:
+    get:
+      tags: [organization]
+      operationId: getActivePeriod
+      summary: Periode yang sedang berlaku
+      description: |
+        Mengembalikan `null` — **bukan `404`** — kalau belum ada yang aktif.
+
+        "Belum ada periode aktif" adalah keadaan yang sah pada sistem yang baru
+        dipasang. `404` akan membuat frontend memperlakukannya sebagai kesalahan,
+        lalu menampilkan pesan gagal untuk keadaan yang normal.
+
+        Hanya satu periode yang boleh aktif sekaligus, dan itu dijaga **partial
+        unique index** di database, bukan pemeriksaan di aplikasi: dua periode
+        aktif sekaligus berarti dua periode yang sama-sama mengaku berlaku.
+      responses:
+        '200':
+          description: Periode aktif, atau `null` kalau belum ada.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/Period'
+                  - type: 'null'
+        '401':
+          $ref: '#/components/responses/NotAuthenticated'
+
+  /organization/periods/{id}:
+    parameters:
+      - $ref: '#/components/parameters/PeriodId'
+
+    patch:
+      tags: [organization]
+      operationId: updatePeriod
+      summary: Mengubah periode
+      description: Sebagian — medan yang tidak dikirim tidak diubah.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PeriodPatch' }
+      responses:
+        '200':
+          description: Diubah.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Period' }
+        '401':
+          $ref: '#/components/responses/NotAuthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFoundOrHidden'
+        '409':
+          $ref: '#/components/responses/DuplicateCode'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
+    delete:
+      tags: [organization]
+      operationId: deletePeriod
+      summary: Menghapus periode
+      description: |
+        **Ditolak `409` kalau masih ada yang merujuknya** — bukan menghapus paksa.
+
+        `periods` dirujuk enam belas tabel, dan sebagian besar kuncinya
+        `on delete set null`. Menghapus paksa akan **diam-diam mengosongkan**
+        `period_id` setiap baris yang menunjuknya: tanpa error, dan tanpa cara
+        mengetahui nilai sebelumnya.
+
+        Itu penerapan §5.2.9 di luar jalur keuangan — gagal berisik lebih baik
+        daripada berhasil diam-diam dengan akibat yang tidak diminta.
+      responses:
+        '204':
+          description: Dihapus.
+        '401':
+          $ref: '#/components/responses/NotAuthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFoundOrHidden'
+        '409':
+          $ref: '#/components/responses/StillReferenced'
+
+  /organization/periods/{id}/activate:
+    parameters:
+      - $ref: '#/components/parameters/PeriodId'
+
+    post:
+      tags: [organization]
+      operationId: activatePeriod
+      summary: Menjadikan periode ini yang berlaku
+      description: |
+        **`POST`, bukan `PATCH`.** Yang dikirim bukan sebagian isi periode,
+        melainkan **perintah**: jadikan yang ini aktif.
+
+        Efeknya pun bukan pada baris itu saja — periode yang tadinya aktif ikut
+        dimatikan. `PATCH { "isActive": true }` akan menyiratkan bahwa yang
+        berubah hanya satu baris, dan menyembunyikan separuh kejadiannya.
+
+        Tanpa `Idempotency-Key`: memanggilnya dua kali menghasilkan keadaan yang
+        sama persis, jadi tidak ada yang perlu dilindungi dari pengiriman ulang.
+      responses:
+        '200':
+          description: Periode diaktifkan.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Period' }
+        '401':
+          $ref: '#/components/responses/NotAuthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFoundOrHidden'
+
+  /organization/divisions:
+    get:
+      tags: [organization]
+      operationId: listDivisions
+      summary: Daftar divisi
+      description: |
+        Diurutkan `sortOrder`, lalu `name` sebagai pemecah seri.
+
+        `sortOrder` sengaja **tidak unik**: dua divisi boleh memakai angka yang
+        sama, dan `name` yang menentukan urutannya. Memaksanya unik akan memaksa
+        setiap penyisipan ulang menomori ulang seluruh daftar — dan itu satu
+        penulisan yang menyentuh puluhan baris untuk menambah satu divisi.
+      responses:
+        '200':
+          description: Daftar divisi.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Division' }
+        '401':
+          $ref: '#/components/responses/NotAuthenticated'
+
+    post:
+      tags: [organization]
+      operationId: createDivision
+      summary: Membuat divisi
+      description: |
+        Policy `organization:write` — hanya `owner` dan `co_owner`.
+
+        **`code` dinormalisasi menjadi huruf kecil**, dan itu bukan kerapian.
+        `divisions.code` dibandingkan **secara harfiah** oleh aturan izin:
+        `resource.ts` memegang `FINANCE_DIVISION_CODE = 'sekbend'`, dan
+        `leadsDivisionOf()` menilai dengan `actor.divisionCodes.includes(...)`
+        tanpa normalisasi di mana pun.
+
+        Divisi berkode `SEKBEND` karena itu akan **mencabut akses keuangan
+        seluruh kepalanya** — tanpa error, tanpa catatan, dan tanpa gejala yang
+        menunjuk ke sebabnya. Yang terlihat dari luar hanya "kepala Sekretaris &
+        Bendahara tidak bisa membuka halaman keuangan".
+
+        Indeks unik di database tidak menolong: ia case-sensitive, jadi
+        `sekbend` dan `SEKBEND` sama-sama boleh ada dan menjadi dua divisi yang
+        berbeda.
+
+        Masukan huruf besar **diubah, bukan ditolak** — menolaknya akan membuat
+        pengisi formulir pertama mengetik `SEKBEND`, mendapat error yang tidak
+        menjelaskan akibatnya, lalu mengetik ulang hal yang sama.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DivisionCreate' }
+      responses:
+        '201':
+          description: Dibuat.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Division' }
+        '401':
+          $ref: '#/components/responses/NotAuthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/DuplicateCode'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /organization/divisions/{id}:
+    parameters:
+      - $ref: '#/components/parameters/DivisionId'
+
+    patch:
+      tags: [organization]
+      operationId: updateDivision
+      summary: Mengubah divisi
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DivisionPatch' }
+      responses:
+        '200':
+          description: Diubah.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Division' }
+        '401':
+          $ref: '#/components/responses/NotAuthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFoundOrHidden'
+        '409':
+          $ref: '#/components/responses/DuplicateCode'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
+    delete:
+      tags: [organization]
+      operationId: deleteDivision
+      summary: Menghapus divisi
+      description: |
+        Ditolak `409` kalau masih dirujuk. `divisions` dirujuk delapan tabel dan
+        sebagian besar kuncinya `on delete set null` — alasannya lengkap di
+        `deletePeriod`.
+      responses:
+        '204':
+          description: Dihapus.
+        '401':
+          $ref: '#/components/responses/NotAuthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFoundOrHidden'
+        '409':
+          $ref: '#/components/responses/StillReferenced'
+
+  /organization/clusters:
+    get:
+      tags: [organization]
+      operationId: listClusters
+      summary: Daftar cluster
+      description: Diurutkan `sortOrder`, lalu `name` sebagai pemecah seri.
+      responses:
+        '200':
+          description: Daftar cluster.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Cluster' }
+        '401':
+          $ref: '#/components/responses/NotAuthenticated'
+
+    post:
+      tags: [organization]
+      operationId: createCluster
+      summary: Membuat cluster
+      description: Policy `organization:write` — hanya `owner` dan `co_owner`.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ClusterCreate' }
+      responses:
+        '201':
+          description: Dibuat.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Cluster' }
+        '401':
+          $ref: '#/components/responses/NotAuthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/DuplicateCode'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /organization/clusters/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ClusterId'
+
+    patch:
+      tags: [organization]
+      operationId: updateCluster
+      summary: Mengubah cluster
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ClusterPatch' }
+      responses:
+        '200':
+          description: Diubah.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Cluster' }
+        '401':
+          $ref: '#/components/responses/NotAuthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFoundOrHidden'
+        '409':
+          $ref: '#/components/responses/DuplicateCode'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
+    delete:
+      tags: [organization]
+      operationId: deleteCluster
+      summary: Menghapus cluster
+      description: Ditolak `409` kalau masih dirujuk — alasannya di `deletePeriod`.
+      responses:
+        '204':
+          description: Dihapus.
+        '401':
+          $ref: '#/components/responses/NotAuthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFoundOrHidden'
+        '409':
+          $ref: '#/components/responses/StillReferenced'
+
+  /organization/subunits:
+    get:
+      tags: [organization]
+      operationId: listSubunits
+      summary: Daftar subunit
+      description: Diurutkan `sortOrder`, lalu `name` sebagai pemecah seri.
+      responses:
+        '200':
+          description: Daftar subunit.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Subunit' }
+        '401':
+          $ref: '#/components/responses/NotAuthenticated'
+
+    post:
+      tags: [organization]
+      operationId: createSubunit
+      summary: Membuat subunit
+      description: Policy `organization:write` — hanya `owner` dan `co_owner`.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SubunitCreate' }
+      responses:
+        '201':
+          description: Dibuat.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Subunit' }
+        '401':
+          $ref: '#/components/responses/NotAuthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/DuplicateCode'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /organization/subunits/{id}:
+    parameters:
+      - $ref: '#/components/parameters/SubunitId'
+
+    patch:
+      tags: [organization]
+      operationId: updateSubunit
+      summary: Mengubah subunit
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SubunitPatch' }
+      responses:
+        '200':
+          description: Diubah.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Subunit' }
+        '401':
+          $ref: '#/components/responses/NotAuthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFoundOrHidden'
+        '409':
+          $ref: '#/components/responses/DuplicateCode'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
+    delete:
+      tags: [organization]
+      operationId: deleteSubunit
+      summary: Menghapus subunit
+      description: Ditolak `409` kalau masih dirujuk — alasannya di `deletePeriod`.
+      responses:
+        '204':
+          description: Dihapus.
+        '401':
+          $ref: '#/components/responses/NotAuthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFoundOrHidden'
+        '409':
+          $ref: '#/components/responses/StillReferenced'
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Profil anggota
+  # ─────────────────────────────────────────────────────────────────────────
+
+  /profiles:
+    get:
+      tags: [profiles]
+      operationId: listProfiles
+      summary: Direktori anggota
+      description: |
+        Bentuk **direktori** — tanpa `email` dan tanpa `phone`.
+
+        Untuk organisasi seukuran ini, nomor telepon seluruh panitia yang
+        terbuka bagi seluruh panitia adalah kebocoran yang nyata, bukan
+        teoretis. Yang membutuhkannya — menghubungi anggota divisi —
+        mendapatkannya lewat `GET /profiles/admin`, yang dijaga `member:admin`.
+
+        Bentuk lengkap sengaja **bukan** penyaring pada endpoint ini, melainkan
+        endpoint tersendiri. Penyaring akan membuat bentuk jawabannya bergantung
+        pada peran pemanggil, dan itu jenis perbedaan yang mudah salah dibaca:
+        satu cabang `if` yang terbalik, dan seluruh email serta nomor telepon
+        terkirim ke semua orang — tanpa error, tanpa gejala, dan hanya ketahuan
+        kalau ada yang memeriksa isi jawabannya.
+
+        Diurutkan `fullName` menaik, dan `limit` berlaku atas urutan itu —
+        jadi memanggil ulang dengan penyaring berbeda tidak menggeser siapa
+        yang masuk ke dalam 100.
+      parameters:
+        - name: divisionId
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+        - name: clusterId
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+        - name: subunitId
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+        - name: status
+          in: query
+          required: false
+          schema: { $ref: '#/components/schemas/MemberStatus' }
+        - name: role
+          in: query
+          required: false
+          description: Cocok kalau peran ini **salah satu** dari peran anggota.
+          schema: { $ref: '#/components/schemas/Role' }
+        - name: q
+          in: query
+          required: false
+          description: |
+            Pencarian `fullName` **atau** `nickname`, tanpa membedakan huruf
+            besar-kecil.
+          schema: { type: string, minLength: 1, maxLength: 80 }
+        - name: limit
+          in: query
+          required: false
+          description: |
+            Bawaannya **100** di sini, bukan 25. Daftar ini dipakai untuk
+            memilih orang — pemilih PIC, anggota divisi — dan daftar sepanjang
+            itu tidak pernah digulir sampai habis oleh manusia.
+          schema: { type: integer, minimum: 1, maximum: 100, default: 100 }
+      responses:
+        '200':
+          description: Daftar anggota, bentuk direktori.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ProfileDirectory' }
+        '401':
+          $ref: '#/components/responses/NotAuthenticated'
+
+    post:
+      tags: [profiles]
+      operationId: createProfile
+      summary: Menambah anggota
+      description: |
+        Policy `member:admin` — hanya `owner` dan `co_owner`.
+
+        **Tanpa email undangan** (keputusan 12 dan 26–28). Baris berstatus
+        `invited` berarti "dibuat owner, belum diklaim"; login Google pertama
+        kali mengubahnya menjadi `active`. Tidak ada tautan konfirmasi yang
+        dikirim ke mana pun, karena sistem ini tidak punya penyedia email sama
+        sekali.
+
+        `status` boleh langsung `active` untuk orang yang sudah dipastikan.
+        Memaksa dua langkah untuk anggota yang jelas aktif hanya menambah satu
+        klik yang selalu dikerjakan tanpa dibaca.
+
+        `roles` dan `status` **ada** di sini dan tidak ada di `ProfileSelfPatch`
+        — inilah satu-satunya tempat sah mengubahnya.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProfileCreate' }
+      responses:
+        '201':
+          description: Anggota dibuat.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProfileFull' }
+        '401':
+          $ref: '#/components/responses/NotAuthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/DuplicateEmail'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /profiles/admin:
+    get:
+      tags: [profiles]
+      operationId: listProfilesAdmin
+      summary: Daftar anggota, bentuk lengkap
+      description: |
+        Policy `member:admin` — hanya `owner` dan `co_owner`.
+
+        Bentuk lengkap: memuat `email`, `phone`, `mustChangePassword`, dan
+        seluruh kolom administrasi. Dipisahkan dari `GET /profiles` supaya
+        kebocoran data pribadi menuntut **dua** kesalahan, bukan satu — dan
+        keduanya dijaga `@Policy` yang berbeda.
+
+        Penyaring dan batasnya sama dengan `GET /profiles`.
+      parameters:
+        - name: divisionId
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+        - name: clusterId
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+        - name: subunitId
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+        - name: status
+          in: query
+          required: false
+          schema: { $ref: '#/components/schemas/MemberStatus' }
+        - name: role
+          in: query
+          required: false
+          schema: { $ref: '#/components/schemas/Role' }
+        - name: q
+          in: query
+          required: false
+          schema: { type: string, minLength: 1, maxLength: 80 }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100, default: 100 }
+      responses:
+        '200':
+          description: Daftar anggota, bentuk lengkap.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ProfileFull' }
+        '401':
+          $ref: '#/components/responses/NotAuthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /profiles/me:
+    get:
+      tags: [profiles]
+      operationId: getOwnProfile
+      summary: Profil sendiri
+      description: |
+        Bentuk lengkap, kecuali `passwordHash` dan `googleSub`.
+
+        Ini juga cara klien mengisi `If-Match` pada `PATCH /profiles/me`
+        berikutnya (§7.16) — klien yang tidak bisa membaca `version` di sini
+        tidak bisa menulis sama sekali.
+      responses:
+        '200':
+          description: Profil pemanggil.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProfileFull' }
+        '401':
+          $ref: '#/components/responses/NotAuthenticated'
+        '404':
+          $ref: '#/components/responses/NotFoundOrHidden'
+
+    patch:
+      tags: [profiles]
+      operationId: updateOwnProfile
+      summary: Mengubah profil sendiri
+      description: |
+        **Kolom privilege tidak bisa ditulis dari sini**, dan itu bukan hasil
+        pemeriksaan melainkan bentuk tipe: `ProfileSelfPatch` tidak memuat
+        `roles`, `status`, `divisionId`, `clusterId`, `subunitId`, `teamRole`,
+        `isKormasit`, `email`, maupun `mustChangePassword`. Medannya memang
+        tidak ada, sehingga tidak ada baris kode yang bisa menuliskannya.
+
+        Dua skema terpisah, bukan satu skema dengan penyaring. Di `sksks`
+        (§5.1.1) seorang anggota bisa mengubah `division_id` dan `is_kormasit`
+        miliknya sendiri: UI-nya sudah memakai whitelist yang benar, tetapi
+        RLS-nya tidak — sehingga console browser cukup untuk melewatinya.
+        Pelajarannya bukan "periksa lagi di server", melainkan **kolomnya tidak
+        boleh ada di skema yang bisa dijangkau**.
+
+        `If-Match` **wajib** di sini, dan itu bukan formalitas: dua perangkat
+        milik orang yang sama membuka halaman profil adalah hal yang biasa, dan
+        tanpa penguncian, yang menyimpan belakangan menghapus isian yang satunya
+        tanpa satu pun pesan (§5.2.12).
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProfileSelfPatch' }
+      responses:
+        '200':
+          description: Diubah.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProfileFull' }
+        '401':
+          $ref: '#/components/responses/NotAuthenticated'
+        '409':
+          $ref: '#/components/responses/VersionConflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '428':
+          $ref: '#/components/responses/IfMatchRequired'
+
+  /profiles/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ProfileId'
+
+    get:
+      tags: [profiles]
+      operationId: getProfile
+      summary: Satu anggota, bentuk direktori
+      description: |
+        Bentuk direktori — tanpa `email` dan tanpa `phone`. Bentuk lengkap
+        hanya lewat `GET /profiles/admin` atau `GET /profiles/me`.
+
+        `id` yang bukan UUID dijawab `404`, bukan `400`: klien tidak diberi
+        cara membedakan "tidak ada" dari "bukan id".
+      responses:
+        '200':
+          description: Anggota ditemukan.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProfileDirectory' }
+        '401':
+          $ref: '#/components/responses/NotAuthenticated'
+        '404':
+          $ref: '#/components/responses/NotFoundOrHidden'
+
+    patch:
+      tags: [profiles]
+      operationId: updateProfile
+      summary: Mengubah anggota
+      description: |
+        Policy `member:admin` — hanya `owner` dan `co_owner`.
+
+        Memuat seluruh kolom privilege, dan itu memang tujuannya: di sinilah
+        tempat sah satu-satunya untuk mengubahnya. Yang menjaga bukan panjang
+        daftarnya, melainkan bahwa hanya `member:admin` yang bisa mencapai
+        endpoint ini.
+
+        `passwordHash` dan `googleSub` **tidak ada di sini** meski admin pun
+        tidak boleh menulisnya: yang pertama hanya lahir dari
+        `POST /profiles/{id}/reset-password`, yang kedua hanya dari verifikasi
+        Google. Kolom yang tidak boleh ditulis siapa pun tidak perlu muncul di
+        DTO mana pun.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProfilePatch' }
+      responses:
+        '200':
+          description: Diubah.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProfileFull' }
+        '401':
+          $ref: '#/components/responses/NotAuthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFoundOrHidden'
+        '409':
+          $ref: '#/components/responses/VersionConflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '428':
+          $ref: '#/components/responses/IfMatchRequired'
+
+  /profiles/{id}/reset-password:
+    parameters:
+      - $ref: '#/components/parameters/ProfileId'
+
+    post:
+      tags: [profiles]
+      operationId: resetProfilePassword
+      summary: Mengganti password anggota dengan yang sementara
+      description: |
+        Policy `member:admin`. `200`, bukan `201`: tidak ada resource baru yang
+        dibuat, dan `Location` tidak menunjuk apa pun yang bisa diambil kembali.
+
+        Yang dikembalikan adalah **password sementara**, dan ia muncul di
+        jawaban ini satu kali saja — tidak disimpan dalam bentuk terbaca di mana
+        pun, dan tidak pernah masuk catatan audit. Yang dicatat audit adalah
+        **bahwa** passwordnya diganti dan oleh siapa, bukan nilainya: catatan
+        audit dibaca lebih banyak orang daripada tabel `profiles`, jadi menaruh
+        nilainya di sana memperluas jangkauannya, bukan mempersempitnya.
+
+        Dua efek samping menyertainya, keduanya disengaja:
+
+        - `mustChangePassword` dinyalakan, sehingga seluruh endpoint non-exempt
+          ditolak sampai passwordnya diganti (§6.5)
+        - **seluruh refresh token anggota itu dicabut.** Alasan seseorang
+          mengganti password orang lain adalah karena ia menduga akunnya sudah
+          dipegang orang lain; kalau sesi yang berjalan dibiarkan hidup, orang
+          yang memegangnya tetap masuk — dan password baru hanya menutup pintu
+          yang sudah dilewatinya.
+
+        **Tanpa `If-Match`.** Rute ini tidak menyunting isi baris melainkan
+        menggantinya dengan nilai baru. "Perubahan yang hilang" tidak punya arti
+        di sini: dua owner yang menekan tombol ini bersamaan menghasilkan satu
+        password yang menang, dan yang kalah tidak kehilangan tulisan yang
+        dibuatnya — ia hanya perlu membacakan yang menang.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Password diganti.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TemporaryPassword' }
+        '401':
+          $ref: '#/components/responses/NotAuthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFoundOrHidden'
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Komponen
@@ -946,14 +1962,56 @@ components:
       name: id
       in: path
       required: true
-      description: `work_items.id`
+      description: Kolom `work_items.id`
       schema: { type: string, format: uuid }
 
     RequestId:
       name: id
       in: path
       required: true
-      description: `requests.id`
+      description: Kolom `requests.id`
+      schema: { type: string, format: uuid }
+
+    PeriodId:
+      name: id
+      in: path
+      required: true
+      description: Kolom `periods.id`. Bukan UUID tetap dijawab `404`, bukan `400`.
+      schema: { type: string, format: uuid }
+
+    DivisionId:
+      name: id
+      in: path
+      required: true
+      description: Kolom `divisions.id`. Bukan UUID tetap dijawab `404`, bukan `400`.
+      schema: { type: string, format: uuid }
+
+    ClusterId:
+      name: id
+      in: path
+      required: true
+      description: Kolom `clusters.id`. Bukan UUID tetap dijawab `404`, bukan `400`.
+      schema: { type: string, format: uuid }
+
+    SubunitId:
+      name: id
+      in: path
+      required: true
+      description: Kolom `subunits.id`. Bukan UUID tetap dijawab `404`, bukan `400`.
+      schema: { type: string, format: uuid }
+
+    ProfileId:
+      name: id
+      in: path
+      required: true
+      description: |
+        `profiles.id`.
+
+        Diperhatikan: rute statis `/profiles/me` dan `/profiles/admin`
+        didaftarkan **sebelum** `/profiles/{id}` di controller. Kalau urutannya
+        terbalik, `GET /profiles/me` akan cocok dengan rute berparameter ini dan
+        dijawab `404` "anggota tidak ditemukan" — pesan yang tidak menyebut
+        sebabnya sama sekali.
       schema: { type: string, format: uuid }
 
     Cursor:
@@ -1010,7 +2068,7 @@ components:
     IfMatch:
       name: If-Match
       in: header
-      required: false
+      required: true
       description: |
         Optimistic locking (`PRD-REVAMP.md` §7.16). Isinya `version` yang
         dibaca klien, sama dengan `ETag` respons terakhir.
@@ -1023,9 +2081,21 @@ components:
         membuat dua orang mengedit baris yang sama tidak saling menimpa tanpa
         sadar — yang kalah diberi tahu, bukan dikalahkan tanpa suara.
 
-        Wajib untuk setiap operasi tulis di domain Fase 3 ke atas. Kalau
-        dihilangkan, server memakai `version` yang dibacanya sendiri — dan itu
-        berarti last-write-wins, yang justru ingin dihindari.
+        **Header ini wajib, dan ketiadaannya ditolak `428`** — bukan diabaikan.
+        Server **tidak punya** jalur cadangan yang memakai versi bacaannya
+        sendiri. Kalau punya, satu klien yang lupa mengirim header akan menulis
+        tanpa penguncian sambil mengira sudah memakainya — dan itu keadaan yang
+        paling berbahaya: pengaman yang **tampak** terpasang.
+
+        Bentuk yang diterima: `"7"`, `7`, dan `W/"7"`. Header yang **ada** tetapi
+        tidak terbaca dijawab `400`, dibedakan dari yang tidak ada supaya
+        penguncian yang gagal tidak pernah tersamar sebagai penguncian yang
+        tidak diminta.
+
+        Hanya dipasang pada operasi yang **menyunting baris yang sudah ada**.
+        `POST` yang membuat baris baru tidak memakainya: tidak ada versi yang
+        bisa bertabrakan. `DELETE /organization/*` juga tidak — keempat tabel
+        acuan itu memang tidak punya kolom `version`.
       schema: { type: string, example: '"7"' }
 
   headers:
@@ -1092,6 +2162,30 @@ components:
         application/problem+json:
           schema: { $ref: '#/components/schemas/Problem' }
 
+    IfMatchRequired:
+      description: |
+        `If-Match` tidak ada pada operasi yang menuntutnya — `428 Precondition
+        Required` (RFC 6585 §3).
+
+        `428`, bukan `400`, dan bedanya berguna: `400` berarti "permintaanmu
+        salah", sedangkan `428` berarti "permintaanmu benar, tetapi kamu harus
+        mengirimkannya secara bersyarat". Klien yang menerima `400` akan mencari
+        kesalahan pada isinya; klien yang menerima `428` tahu persis apa yang
+        kurang — versi baris yang dibacanya.
+
+        `code`-nya bergantung modul: `work_item_version_required`,
+        `request_version_required`, atau `profile_version_required`.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+          example:
+            type: https://api.invalid/problems/version-required
+            title: Perubahan pekerjaan harus disertai header If-Match.
+            status: 428
+            code: work_item_version_required
+            instance: /api/v1/work-items/9f1c…
+            requestId: 01J8XQ7K3M9W2P
+
     TransitionRejected:
       description: |
         Perpindahan statusnya tidak sah dari keadaan sekarang — atau ada konflik
@@ -1127,15 +2221,94 @@ components:
                 code: invalid_format
                 message: Tanggal tidak dikenali.
 
+    DuplicateCode:
+      description: |
+        `code` itu sudah dipakai baris lain di tabel yang sama.
+
+        Ditegakkan **indeks unik di database**, bukan pemeriksaan di aplikasi:
+        memeriksa lalu menyisipkan adalah dua pernyataan, dan dua permintaan
+        yang berbarengan sama-sama lolos pemeriksaan sebelum salah satunya
+        menyisipkan. Indeks unik tidak punya celah itu.
+
+        Normalisasi terjadi **sebelum** pencocokan — `code` periode menjadi
+        huruf besar, `code` divisi/cluster/subunit menjadi huruf kecil. Jadi
+        `KKN-2026` dan `kkn-2026` adalah periode yang sama.
+
+        `409`, bukan `422`: isian pemanggilnya sah, yang gagal hanyalah
+        tabrakan dengan baris yang sudah ada — dan itu keadaan, bukan kesalahan
+        penulisan.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+          example:
+            type: https://api.invalid/problems/duplicate-code
+            title: Kode itu sudah dipakai.
+            status: 409
+            code: duplicate_code
+            detail: Kode "SEKBEND" sudah dipakai divisi lain.
+            instance: /api/v1/organization/divisions
+            requestId: 01J8XQ7K3M9W2P
+
+    DuplicateEmail:
+      description: |
+        Email itu sudah dipakai profil lain.
+
+        Email adalah **identitas login**, bukan sekadar kolom kontak: satu email
+        hanya boleh menunjuk satu orang, karena login Google memakai email
+        sebagai kuncinya. Dua baris dengan email yang sama berarti login
+        berikutnya bisa masuk ke baris yang mana saja.
+
+        Dibandingkan setelah dinormalisasi (dipangkas dan dihuruf-kecilkan),
+        sehingga `Budi@Example.com ` dan `budi@example.com` dianggap sama.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+          example:
+            type: https://api.invalid/problems/duplicate-email
+            title: Email itu sudah terdaftar.
+            status: 409
+            code: duplicate_email
+            instance: /api/v1/profiles
+            requestId: 01J8XQ7K3M9W2P
+
+    StillReferenced:
+      description: |
+        Baris ini masih dirujuk baris lain, jadi tidak dihapus.
+
+        **Ini penolakan, bukan kegagalan.** Sebagian besar kunci asing di sistem
+        ini `on delete set null`, sehingga menghapus paksa akan **berhasil**
+        sambil diam-diam mengosongkan rujukannya di mana-mana — tanpa error, dan
+        tanpa cara mengetahui nilai sebelumnya. Yang hilang bukan satu baris,
+        melainkan kaitan antara banyak baris dan data acuan ini.
+
+        Karena itu penghapusan diperiksa lebih dulu, dan ditolak selagi masih
+        ada yang menunjuk. Yang ingin tetap menghapus harus memindahkan
+        rujukannya dulu — dan keputusan itu memang pantas diambil sadar.
+
+        Penerapan §5.2.9 di luar jalur keuangan: gagal berisik lebih baik
+        daripada berhasil diam-diam dengan akibat yang tidak diminta.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+          example:
+            type: https://api.invalid/problems/still-referenced
+            title: Data ini masih dipakai di tempat lain.
+            status: 409
+            code: still_referenced
+            detail: Masih ada 3 anggota yang tergabung di divisi ini.
+            instance: /api/v1/organization/divisions/3f1c…/..
+            requestId: 01J8XQ7K3M9W2P
+
     RateLimited:
       description: |
         Melewati batas percobaan. Login 5 per 15 menit; tulis 100/menit; baca
         300/menit; ekspor 5/jam.
 
-        Penghitungnya ada di tabel `rate_limit_keys` di Postgres, bukan di memori
-        proses (keputusan 43). Penghitung in-memory akan tampak berfungsi saat
-        diuji dan gagal saat dipakai: setiap instans serverless punya memorinya
-        sendiri, sehingga batas sebenarnya adalah batas dikali jumlah instans.
+        Penghitungnya ada di tabel `rate_limit_counters` di Postgres, bukan di
+        memori proses (keputusan 43). Penghitung in-memory akan tampak berfungsi
+        saat diuji dan gagal saat dipakai: setiap instans serverless punya
+        memorinya sendiri, sehingga batas sebenarnya adalah batas dikali jumlah
+        instans.
       headers:
         Retry-After:
           description: Detik sampai boleh mencoba lagi.
@@ -1802,3 +2975,463 @@ components:
           type: array
           items: { $ref: '#/components/schemas/Request' }
         meta: { $ref: '#/components/schemas/PageMeta' }
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Organisasi
+    # ─────────────────────────────────────────────────────────────────────────
+
+    KknPhase:
+      type: string
+      description: |
+        Tahapan periode. Dipakai untuk menyesuaikan istilah dan menu, bukan
+        untuk menentukan izin — periode yang aktif berlaku sama di ketiga fase.
+      enum: [pre_kkn, kkn, post_kkn]
+
+    Period:
+      type: object
+      required: [id, code, name, startsOn, endsOn, phase, isActive, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        code:
+          type: string
+          description: Selalu huruf besar. `KKN-2026-2027`.
+          example: KKN-2026-2027
+        name: { type: string, example: KKN 2026/2027 — Desa Sukamaju }
+        startsOn:
+          type: string
+          format: date
+          description: Tanggal saja; tidak ada jam.
+          example: '2026-12-19'
+        endsOn:
+          type: string
+          format: date
+        phase: { $ref: '#/components/schemas/KknPhase' }
+        isActive:
+          type: boolean
+          description: |
+            Hanya satu periode boleh `true` sekaligus — dijaga partial unique
+            index di database, bukan pemeriksaan di aplikasi. Dua periode aktif
+            berarti dua periode yang sama-sama mengaku berlaku, dan setiap
+            query yang menyaring "periode yang berlaku" akan memilih salah
+            satunya tanpa pola yang bisa ditebak.
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    PeriodCreate:
+      type: object
+      required: [code, name, startsOn, endsOn]
+      properties:
+        code:
+          type: string
+          minLength: 3
+          maxLength: 32
+          description: |
+            Huruf, angka, dan tanda hubung. **Diubah menjadi huruf besar**,
+            bukan ditolak kalau dikirim huruf kecil.
+          example: KKN-2026-2027
+        name: { type: string, minLength: 2, maxLength: 120 }
+        startsOn:
+          type: string
+          format: date
+          description: Bentuk `YYYY-MM-DD`. Harus sebelum `endsOn`.
+          example: '2026-12-19'
+        endsOn:
+          type: string
+          format: date
+          example: '2027-02-28'
+        phase: { $ref: '#/components/schemas/KknPhase' }
+
+    PeriodPatch:
+      type: object
+      description: Sebagian — medan yang tidak dikirim tidak diubah.
+      properties:
+        code: { type: string, minLength: 3, maxLength: 32 }
+        name: { type: string, minLength: 2, maxLength: 120 }
+        startsOn: { type: string, format: date }
+        endsOn: { type: string, format: date }
+        phase: { $ref: '#/components/schemas/KknPhase' }
+
+    Division:
+      type: object
+      required: [id, code, name, sortOrder, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        code:
+          type: string
+          description: |
+            Selalu huruf kecil, dan **dibandingkan secara harfiah** oleh aturan
+            izin (`resource.ts` memegang `'sekbend'`). Lihat `createDivision`.
+          example: sekbend
+        name: { type: string, maxLength: 120, example: Sekretaris & Bendahara }
+        icon:
+          type: [string, 'null']
+          maxLength: 64
+          description: Nama ikon, bukan URL. Dictionary frontend yang memetakannya.
+        description: { type: [string, 'null'], maxLength: 2000 }
+        sortOrder:
+          type: integer
+          minimum: 0
+          maximum: 9999
+          description: Urutan tampil. Boleh sama antar baris; itu bukan kesalahan.
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    DivisionCreate:
+      type: object
+      required: [code, name]
+      properties:
+        code:
+          type: string
+          minLength: 2
+          maxLength: 24
+          description: Huruf, angka, dan tanda hubung. **Diubah menjadi huruf kecil.**
+        name: { type: string, minLength: 2, maxLength: 120 }
+        icon: { type: [string, 'null'], maxLength: 64 }
+        description: { type: [string, 'null'], maxLength: 2000 }
+        sortOrder: { type: integer, minimum: 0, maximum: 9999, default: 0 }
+
+    DivisionPatch:
+      type: object
+      properties:
+        code: { type: string, minLength: 2, maxLength: 24 }
+        name: { type: string, minLength: 2, maxLength: 120 }
+        icon: { type: [string, 'null'], maxLength: 64 }
+        description: { type: [string, 'null'], maxLength: 2000 }
+        sortOrder: { type: integer, minimum: 0, maximum: 9999 }
+
+    Cluster:
+      type: object
+      required: [id, code, name, sortOrder, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string, example: c1 }
+        name: { type: string, maxLength: 120, example: Cluster 1 }
+        sortOrder: { type: integer, minimum: 0, maximum: 9999 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    ClusterCreate:
+      type: object
+      required: [code, name]
+      properties:
+        code: { type: string, minLength: 2, maxLength: 24 }
+        name: { type: string, minLength: 2, maxLength: 120 }
+        sortOrder: { type: integer, minimum: 0, maximum: 9999, default: 0 }
+
+    ClusterPatch:
+      type: object
+      properties:
+        code: { type: string, minLength: 2, maxLength: 24 }
+        name: { type: string, minLength: 2, maxLength: 120 }
+        sortOrder: { type: integer, minimum: 0, maximum: 9999 }
+
+    Subunit:
+      type: object
+      required: [id, code, name, sortOrder, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string, example: dsn-sukamaju }
+        name: { type: string, maxLength: 120, example: Subunit Desa Sukamaju }
+        villageName:
+          type: [string, 'null']
+          maxLength: 160
+          description: |
+            Nama desa, terpisah dari `name`. Dipisahkan karena ia dipakai untuk
+            mengelompokkan laporan per desa, sementara `name` adalah label yang
+            dibaca manusia dan boleh berbunyi apa saja.
+        sortOrder: { type: integer, minimum: 0, maximum: 9999 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    SubunitCreate:
+      type: object
+      required: [code, name]
+      properties:
+        code: { type: string, minLength: 2, maxLength: 24 }
+        name: { type: string, minLength: 2, maxLength: 120 }
+        villageName: { type: [string, 'null'], maxLength: 160 }
+        sortOrder: { type: integer, minimum: 0, maximum: 9999, default: 0 }
+
+    SubunitPatch:
+      type: object
+      properties:
+        code: { type: string, minLength: 2, maxLength: 24 }
+        name: { type: string, minLength: 2, maxLength: 120 }
+        villageName: { type: [string, 'null'], maxLength: 160 }
+        sortOrder: { type: integer, minimum: 0, maximum: 9999 }
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Profil
+    # ─────────────────────────────────────────────────────────────────────────
+
+    ProfileDirectory:
+      type: object
+      description: |
+        Bentuk yang boleh dibaca siapa saja yang sudah masuk. **Tanpa `email`
+        dan tanpa `phone`** — lihat `listProfiles`.
+
+        Karena itu ia juga bentuk yang dipakai `GET /profiles/{id}`: satu
+        bentuk untuk satu tingkat keterbukaan, bukan bentuk yang berbeda-beda
+        menurut siapa yang bertanya.
+      required:
+        [id, fullName, roles, status, isKormasit, version]
+      properties:
+        id: { type: string, format: uuid }
+        fullName: { type: string, example: Budi Santoso }
+        nickname: { type: [string, 'null'], example: Budi }
+        photoUrl: { type: [string, 'null'], format: uri }
+        roles:
+          type: array
+          items: { $ref: '#/components/schemas/Role' }
+          description: Satu anggota boleh memegang lebih dari satu peran.
+        status: { $ref: '#/components/schemas/MemberStatus' }
+        divisionId: { type: [string, 'null'], format: uuid }
+        clusterId: { type: [string, 'null'], format: uuid }
+        subunitId: { type: [string, 'null'], format: uuid }
+        teamRole:
+          type: [string, 'null']
+          maxLength: 120
+          description: Sebutan jabatan bebas, misalnya "Koordinator Acara".
+        isKormasit:
+          type: boolean
+          description: |
+            Badge, bukan wewenang. **Tidak dihitung dari peran mana pun** — di
+            `sksks` ia kadang disimpulkan dari divisi (temuan #1), sehingga
+            seorang kadiv bisa tampil sebagai kormasit tanpa pernah ditetapkan.
+        version:
+          type: integer
+          description: Untuk `If-Match` pada penulisan berikutnya.
+
+    ProfileFull:
+      type: object
+      description: |
+        Bentuk lengkap — `GET /profiles/me` dan `GET /profiles/admin`.
+
+        **`passwordHash` dan `googleSub` tidak pernah ada di sini.** Keduanya
+        disebut satu per satu di `fullSelection()`, bukan dibuang setelah
+        pengambilan: daftar-buang gagal terbuka (kolom baru ikut terkirim
+        sampai seseorang ingat membuangnya), daftar-sebut gagal tertutup.
+        Untuk kolom yang isinya hash password, arah kegagalannya tidak boleh
+        ditentukan oleh ingatan.
+      required:
+        [id, email, fullName, roles, status, isKormasit, mustChangePassword, version, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        fullName: { type: string }
+        nickname: { type: [string, 'null'] }
+        photoUrl: { type: [string, 'null'], format: uri }
+        phone: { type: [string, 'null'], example: '+62 812-3456-7890' }
+        facultyMajor: { type: [string, 'null'], maxLength: 160 }
+        batchYear:
+          type: [string, 'null']
+          description: Empat angka, disimpan sebagai teks — bukan bilangan.
+          example: '2023'
+        mustChangePassword:
+          type: boolean
+          description: |
+            Selama `true`, seluruh endpoint non-exempt ditolak (§6.5). Menyala
+            setelah password diganti admin, dan padam setelah pemiliknya
+            menggantinya sendiri.
+        roles:
+          type: array
+          items: { $ref: '#/components/schemas/Role' }
+        status: { $ref: '#/components/schemas/MemberStatus' }
+        divisionId: { type: [string, 'null'], format: uuid }
+        clusterId: { type: [string, 'null'], format: uuid }
+        subunitId: { type: [string, 'null'], format: uuid }
+        teamRole: { type: [string, 'null'], maxLength: 120 }
+        isKormasit: { type: boolean }
+        socialLinks:
+          type: [object, 'null']
+          description: |
+            Objek berkunci tetap, bukan `record` bebas — kunci yang tidak
+            dikenal ditolak `422`, bukan dibuang diam-diam.
+          additionalProperties: false
+          properties:
+            instagram: { type: [string, 'null'], format: uri, maxLength: 300 }
+            linkedin: { type: [string, 'null'], format: uri, maxLength: 300 }
+            github: { type: [string, 'null'], format: uri, maxLength: 300 }
+            tiktok: { type: [string, 'null'], format: uri, maxLength: 300 }
+            youtube: { type: [string, 'null'], format: uri, maxLength: 300 }
+            website: { type: [string, 'null'], format: uri, maxLength: 300 }
+        skills:
+          type: [array, 'null']
+          items: { type: string, maxLength: 60 }
+          maxItems: 30
+        hobbies:
+          type: [array, 'null']
+          items: { type: string, maxLength: 60 }
+          maxItems: 30
+        availabilityNote: { type: [string, 'null'], maxLength: 500 }
+        emergencyContactName: { type: [string, 'null'], maxLength: 160 }
+        emergencyContactPhone: { type: [string, 'null'], maxLength: 32 }
+        version: { type: integer }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    ProfileSelfPatch:
+      type: object
+      description: |
+        Yang boleh diubah pemiliknya sendiri — **dan hanya ini**.
+
+        Yang tidak ada di sini, beserta akibatnya kalau ada:
+
+        - `email` — dipakai untuk masuk; mengubahnya dari dalam sesi berarti
+          memindahkan akun ke alamat yang mungkin belum diverifikasi pemiliknya
+        - `roles`, `status` — menentukan seluruh wewenang; diberikan orang lain
+        - `divisionId`, `clusterId`, `subunitId` — menentukan unit kerja. Di
+          `sksks` inilah §5.1.1: anggota menunjuk dirinya ke divisi mana pun,
+          lalu menjadi Kepala Divisi di sana
+        - `teamRole`, `isKormasit` — menulisnya sendiri berarti mengangkat diri
+          sendiri
+        - `mustChangePassword` — lapisan yang memaksa penggantian password
+          sementara; kalau bisa dimatikan sendiri, ia tidak menjaga apa pun
+
+        Semuanya opsional: `PATCH` yang tidak mengirim medan apa pun tetap sah
+        dan tidak mengubah apa-apa selain menaikkan `version`.
+      properties:
+        fullName: { type: string, minLength: 2, maxLength: 160 }
+        nickname: { type: [string, 'null'], maxLength: 60 }
+        photoUrl: { type: [string, 'null'], format: uri, maxLength: 500 }
+        phone:
+          type: [string, 'null']
+          maxLength: 32
+          description: |
+            Angka, spasi, dan `+ ( ) -`. **Awalan `+62` tidak dipaksakan**: nomor
+            darurat bisa saja nomor rumah, dan memaksakannya akan membuat
+            formulir menolak isian yang benar.
+        facultyMajor: { type: [string, 'null'], maxLength: 160 }
+        batchYear:
+          type: [string, 'null']
+          description: Empat angka, misalnya `2023`.
+        socialLinks:
+          type: [object, 'null']
+          additionalProperties: false
+          description: Kunci yang tidak dikenal ditolak `422`, bukan dibuang.
+          properties:
+            instagram: { type: [string, 'null'], format: uri, maxLength: 300 }
+            linkedin: { type: [string, 'null'], format: uri, maxLength: 300 }
+            github: { type: [string, 'null'], format: uri, maxLength: 300 }
+            tiktok: { type: [string, 'null'], format: uri, maxLength: 300 }
+            youtube: { type: [string, 'null'], format: uri, maxLength: 300 }
+            website: { type: [string, 'null'], format: uri, maxLength: 300 }
+        skills:
+          type: [array, 'null']
+          items: { type: string, minLength: 1, maxLength: 60 }
+          maxItems: 30
+        hobbies:
+          type: [array, 'null']
+          items: { type: string, minLength: 1, maxLength: 60 }
+          maxItems: 30
+        availabilityNote: { type: [string, 'null'], maxLength: 500 }
+        emergencyContactName: { type: [string, 'null'], maxLength: 160 }
+        emergencyContactPhone: { type: [string, 'null'], maxLength: 32 }
+
+    ProfileCreate:
+      type: object
+      description: |
+        **Tanpa password.** `invited` berarti "baris dibuat owner, belum
+        diklaim", dan login Google pertama kali mengubahnya menjadi `active`
+        (keputusan 26–28). Tidak ada email undangan yang dikirim ke mana pun —
+        sistem ini tidak punya penyedia email sama sekali, dan jalur email
+        itulah yang melahirkan temuan §5.2.7 di `sksks`.
+      required: [email, fullName]
+      properties:
+        email:
+          type: string
+          format: email
+          description: |
+            Normalisasi: dipangkas dan dihuruf-kecilkan sebelum disimpan dan
+            sebelum dibandingkan. Karena itu `Budi@Example.com ` dan
+            `budi@example.com` adalah orang yang sama, dan yang kedua ditolak
+            `409`.
+        fullName: { type: string, minLength: 2, maxLength: 160 }
+        nickname: { type: [string, 'null'], maxLength: 60 }
+        phone: { type: [string, 'null'], maxLength: 32 }
+        roles:
+          type: array
+          items: { $ref: '#/components/schemas/Role' }
+          minItems: 1
+          default: [member]
+        status:
+          $ref: '#/components/schemas/MemberStatus'
+          description: Bawaannya `invited`; boleh langsung `active`.
+        divisionId: { type: [string, 'null'], format: uuid }
+        clusterId: { type: [string, 'null'], format: uuid }
+        subunitId: { type: [string, 'null'], format: uuid }
+        teamRole: { type: [string, 'null'], maxLength: 120 }
+        isKormasit: { type: boolean, default: false }
+
+    ProfilePatch:
+      type: object
+      description: |
+        Seluruh kolom privilege — di sinilah tempat sah satu-satunya untuk
+        mengubahnya, dan hanya `member:admin` yang bisa mencapainya.
+
+        `passwordHash` dan `googleSub` tidak ada di sini meski admin pun tidak
+        boleh menulisnya; kolom yang tidak boleh ditulis siapa pun tidak perlu
+        muncul di DTO mana pun.
+      properties:
+        email: { type: string, format: email }
+        fullName: { type: string, minLength: 2, maxLength: 160 }
+        nickname: { type: [string, 'null'], maxLength: 60 }
+        photoUrl: { type: [string, 'null'], format: uri, maxLength: 500 }
+        phone: { type: [string, 'null'], maxLength: 32 }
+        facultyMajor: { type: [string, 'null'], maxLength: 160 }
+        batchYear: { type: [string, 'null'], maxLength: 12 }
+        roles:
+          type: array
+          items: { $ref: '#/components/schemas/Role' }
+          minItems: 1
+        status: { $ref: '#/components/schemas/MemberStatus' }
+        divisionId: { type: [string, 'null'], format: uuid }
+        clusterId: { type: [string, 'null'], format: uuid }
+        subunitId: { type: [string, 'null'], format: uuid }
+        teamRole: { type: [string, 'null'], maxLength: 120 }
+        isKormasit: { type: boolean }
+        mustChangePassword:
+          type: boolean
+          description: |
+            Ada di sini dan tidak di `ProfileSelfPatch`: mematikannya sendiri
+            adalah cara melewati kewajiban mengganti password sementara.
+
+    TemporaryPassword:
+      type: object
+      description: |
+        Muncul **satu kali saja**, di jawaban ini. Tidak disimpan dalam bentuk
+        terbaca di mana pun dan tidak masuk catatan audit — yang dicatat adalah
+        bahwa passwordnya diganti dan oleh siapa.
+
+        `mustChangePassword` selalu `true` di sini, karena itu memang tujuan
+        seluruh operasinya.
+      required: [temporaryPassword, profileId, email, mustChangePassword]
+      properties:
+        temporaryPassword:
+          type: string
+          description: Bacakan ke anggotanya lewat kanal yang sudah dikenal, bukan lewat kanal yang sama dengan tautan apa pun.
+        profileId: { type: string, format: uuid }
+        email: { type: string, format: email }
+        mustChangePassword: { type: boolean, enum: [true] }
+
+    ResolveSyncConflictRequest:
+      type: object
+      description: |
+        Menutup konflik sinkronisasi (keputusan 49). Selama `syncConflictAt`
+        terisi, transisi status ditolak bagi semua peran — termasuk `owner` —
+        dan rute inilah satu-satunya jalan keluar.
+      required: [status, note]
+      properties:
+        status:
+          $ref: '#/components/schemas/RequestStatus'
+          description: Keadaan yang **diputuskan berlaku**, bukan keadaan yang diharapkan.
+        note:
+          type: string
+          minLength: 3
+          maxLength: 2000
+          description: |
+            Wajib. Konflik yang selesai tanpa catatan alasan akan terulang
+            tanpa ada yang tahu mengapa ia pernah ada.
+        clarificationNote: { type: [string, 'null'] }
+        resultSummary: { type: [string, 'null'] }
+        holdReason: { type: [string, 'null'] }

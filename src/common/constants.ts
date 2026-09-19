@@ -15,5 +15,14 @@ export const REQUEST_ID_HEADER = 'x-request-id';
 /** Penguncian optimistis (§7.16). */
 export const IF_MATCH_HEADER = 'if-match';
 
-/** Idempotensi tulis (§7.10) — dipakai di pass berikutnya. */
+/** Idempotensi tulis (§7.10). */
 export const IDEMPOTENCY_KEY_HEADER = 'idempotency-key';
+
+/**
+ * Menandai rute yang hasilnya tidak disimpan meski kuncinya dikirim.
+ *
+ * Kuncinya ada di sini, bukan di berkas decorator-nya, karena alasan yang sama
+ * dengan kunci lain di atas: yang menulis dan yang membaca harus memakai string
+ * yang **persis** sama, dan kegagalan akibat tidak sama tidak bersuara.
+ */
+export const SKIP_IDEMPOTENCY_KEY = 'samudrakarsa:skipIdempotency';

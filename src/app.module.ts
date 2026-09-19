@@ -15,6 +15,8 @@ import { AppConfigModule } from './config/config.module';
 import { AuditModule } from './audit/audit.module';
 import { DatabaseModule } from './database/database.module';
 import { HealthModule } from './health/health.module';
+import { IdempotencyInterceptor } from './idempotency/idempotency.interceptor';
+import { IdempotencyModule } from './idempotency/idempotency.module';
 import { OrganizationModule } from './organization/organization.module';
 import { PolicyGuard } from './policy/policy.guard';
 import { PolicyModule } from './policy/policy.module';
@@ -37,6 +39,14 @@ import { WorkItemsModule } from './work-items/work-items.module';
  *
  * Ketergantungan pada disiplin untuk hal-hal ini adalah persis yang dihapus
  * oleh revamp ini (R3).
+ *
+ * `IdempotencyInterceptor` adalah `APP_INTERCEPTOR` yang **kedua**, dan
+ * urutannya penting: interceptor berjalan berurutan sesuai urutan
+ * pendaftarannya. Logging didaftarkan lebih dulu supaya ia membungkus yang
+ * lain — satu baris log tetap tercatat untuk permintaan yang ditolak karena
+ * kuncinya dipakai ulang, dan justru penolakan itu yang paling perlu terlihat.
+ * Kalau urutannya dibalik, penolakan idempotensi terjadi **di luar** logging
+ * dan permintaan itu tidak meninggalkan jejak apa pun.
  */
 @Module({
   imports: [
@@ -44,6 +54,7 @@ import { WorkItemsModule } from './work-items/work-items.module';
     DatabaseModule,
     AuditModule,
     RateLimitModule,
+    IdempotencyModule,
     AuthModule,
     PolicyModule,
     HealthModule,
@@ -57,6 +68,7 @@ import { WorkItemsModule } from './work-items/work-items.module';
     { provide: APP_PIPE, useClass: ZodValidationPipe },
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
     { provide: APP_INTERCEPTOR, useClass: LoggingInterceptor },
+    { provide: APP_INTERCEPTOR, useClass: IdempotencyInterceptor },
   ],
 })
 export class AppModule implements NestModule {

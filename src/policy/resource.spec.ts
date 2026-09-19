@@ -118,6 +118,11 @@ const request = (
   status: 'draft',
   requesterId: null,
   targetDivisionCode: 'medkre',
+  // Ditulis eksplisit meski bawaannya `null` — sama seperti `primaryPicId` di
+  // atas. Tanpa baris ini medannya hanya datang dari `...overrides`, dan
+  // `Partial` membuatnya bertipe `string | null | undefined`; yang membuat
+  // seluruh literalnya tidak lagi bisa ditugaskan ke `RequestForPolicy`.
+  assignedPicId: null,
   syncConflictAt: null,
   ...overrides,
 });

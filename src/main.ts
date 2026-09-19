@@ -1,7 +1,9 @@
 import { Logger, VersioningType, type INestApplication } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 
 import { AppModule } from './app.module';
+import { securityHeaders } from './common/http/security-headers';
 
 /**
  * Instans aplikasi disimpan di lingkup modul supaya invocation berikutnya
@@ -27,6 +29,20 @@ let cached: Promise<INestApplication> | undefined;
  * yang berbeda.
  */
 export function configureApp(app: INestApplication): void {
+  // Header keamanan dipasang paling awal (§7.18).
+  //
+  // Didaftarkan sebelum `app.init()`, dan itu bukan kebetulan: `init()` yang
+  // mendaftarkan seluruh rute ke router Express, sehingga middleware yang
+  // dipasang sesudahnya berjalan **setelah** handler — dan header yang
+  // dipasang setelah respons dikirim tidak berpengaruh apa-apa. Kegagalannya
+  // tidak bersuara: seluruh API berjalan normal, hanya tanpa header.
+  //
+  // Nilainya dibaca dari `ConfigService`, bukan dari `process.env`, supaya
+  // yang dibaca adalah hasil validasi skema yang sama dengan sisa aplikasi.
+  app.use(
+    securityHeaders(app.get(ConfigService).get<string>('NODE_ENV') ?? ''),
+  );
+
   // Prefix-nya 'api', BUKAN 'api/v1'.
   //
   // Versioning URI menambahkan segmen versinya sendiri, jadi 'api/v1' di sini
