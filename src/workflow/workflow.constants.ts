@@ -44,6 +44,12 @@
 export const TRANSITION_ENTITY = {
   workItem: 'work_item',
   request: 'request',
+  letter: 'letter',
+  budget: 'budget',
+  content: 'content',
+  creative: 'creative',
+  partner: 'partner',
+  logistics: 'logistics',
 } as const;
 
 export type TransitionEntityType =

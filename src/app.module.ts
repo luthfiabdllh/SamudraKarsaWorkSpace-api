@@ -24,6 +24,14 @@ import { ProfilesModule } from './profiles/profiles.module';
 import { RateLimitModule } from './rate-limit/rate-limit.module';
 import { RequestsModule } from './requests/requests.module';
 import { WorkItemsModule } from './work-items/work-items.module';
+import { LettersModule } from './letters/letters.module';
+import { FinanceModule } from './finance/finance.module';
+import { DuesModule } from './dues/dues.module';
+import { ContentModule } from './content/content.module';
+import { CreativeModule } from './creative/creative.module';
+import { PartnersModule } from './partners/partners.module';
+import { InventoryModule } from './inventory/inventory.module';
+import { LogisticsModule } from './logistics/logistics.module';
 
 /**
  * Akar aplikasi.
@@ -62,6 +70,14 @@ import { WorkItemsModule } from './work-items/work-items.module';
     ProfilesModule,
     WorkItemsModule,
     RequestsModule,
+    LettersModule,
+    FinanceModule,
+    DuesModule,
+    ContentModule,
+    CreativeModule,
+    PartnersModule,
+    InventoryModule,
+    LogisticsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: PolicyGuard },

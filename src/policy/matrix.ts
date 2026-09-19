@@ -144,9 +144,119 @@ export const ROLE_POLICY_MATRIX = {
    */
   'request:delete': ['owner', 'co_owner', 'division_head', 'division_deputy'],
 
-  // Keuangan — `finance:export` sengaja lebih sempit daripada `finance:read`.
-  // Dua baris di §7.9 memang berbeda, dan perbedaannya dipertahankan di sini.
+  // Keuangan — akses sangat ketat, lihat `canReadFinance` di `resource.ts`.
+  // `finance:read` dibatasi `owner`/`co_owner` di sini sebagai gerbang pertama;
+  // kepala Sekbend diizinkan oleh service lewat `canReadFinance`, bukan guard.
+  // Dua baris di §7.9 memang berbeda (`finance:read` vs `finance:export`),
+  // dan perbedaannya dipertahankan.
+  'finance:read': ['owner', 'co_owner'],
+  'finance:write': ['owner', 'co_owner'],
   'finance:export': ['owner', 'co_owner'],
+
+  // Persuratan — semua anggota aktif bisa mengajukan dan mengubah surat.
+  // Penghapusan dibatasi kepala divisi ke atas agar tidak ada yang menghilangkan
+  // surat divisi lain.
+  'letter:read': [
+    'owner',
+    'co_owner',
+    'division_head',
+    'division_deputy',
+    'member',
+  ],
+  'letter:write': [
+    'owner',
+    'co_owner',
+    'division_head',
+    'division_deputy',
+    'member',
+  ],
+  'letter:delete': ['owner', 'co_owner', 'division_head', 'division_deputy'],
+
+  // Konten (Humas) — Open Collaboration Mode; write adalah gerbang kasar,
+  // `canEditContent` di `resource.ts` yang memutuskan lebih lanjut.
+  'content:read': [
+    'owner',
+    'co_owner',
+    'division_head',
+    'division_deputy',
+    'member',
+  ],
+  'content:write': [
+    'owner',
+    'co_owner',
+    'division_head',
+    'division_deputy',
+    'member',
+  ],
+  'content:delete': ['owner', 'co_owner', 'division_head', 'division_deputy'],
+
+  // Kreatif (Media Kreatif) — pola sama dengan konten.
+  'creative:read': [
+    'owner',
+    'co_owner',
+    'division_head',
+    'division_deputy',
+    'member',
+  ],
+  'creative:write': [
+    'owner',
+    'co_owner',
+    'division_head',
+    'division_deputy',
+    'member',
+  ],
+  'creative:delete': ['owner', 'co_owner', 'division_head', 'division_deputy'],
+
+  // Sponsorship / Mitra — pipeline mitra terbuka untuk semua anggota aktif.
+  'partner:read': [
+    'owner',
+    'co_owner',
+    'division_head',
+    'division_deputy',
+    'member',
+  ],
+  'partner:write': [
+    'owner',
+    'co_owner',
+    'division_head',
+    'division_deputy',
+    'member',
+  ],
+  'partner:delete': ['owner', 'co_owner', 'division_head', 'division_deputy'],
+
+  // Inventaris — semua anggota bisa mencatat; hapus dibatasi.
+  'inventory:read': [
+    'owner',
+    'co_owner',
+    'division_head',
+    'division_deputy',
+    'member',
+  ],
+  'inventory:write': [
+    'owner',
+    'co_owner',
+    'division_head',
+    'division_deputy',
+    'member',
+  ],
+  'inventory:delete': ['owner', 'co_owner', 'division_head', 'division_deputy'],
+
+  // Logistik (pengiriman + perjalanan) — pola sama.
+  'logistics:read': [
+    'owner',
+    'co_owner',
+    'division_head',
+    'division_deputy',
+    'member',
+  ],
+  'logistics:write': [
+    'owner',
+    'co_owner',
+    'division_head',
+    'division_deputy',
+    'member',
+  ],
+  'logistics:delete': ['owner', 'co_owner', 'division_head', 'division_deputy'],
 
   // Pengumuman
   'announcement:create': [
@@ -345,7 +455,6 @@ export const RESOURCE_POLICY_NAMES = [
   'work-item:set-pic',
   'work-item:transition',
   'request:transition',
-  'finance:read',
   'feedback:read-own',
 ] as const;
 

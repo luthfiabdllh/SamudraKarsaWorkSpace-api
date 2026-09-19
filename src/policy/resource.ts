@@ -140,6 +140,61 @@ export interface FeedbackForPolicy {
   readonly isPrivate: boolean;
 }
 
+/** Surat, sejauh yang dibutuhkan policy. */
+export interface LetterForPolicy {
+  readonly id: string;
+  readonly requesterId: string | null;
+  readonly picId: string | null;
+}
+
+/**
+ * Konten, sejauh yang dibutuhkan policy.
+ *
+ * `divisionCode` adalah kode divisi **pembuat** — diisi dari join ke
+ * `profiles → divisions` saat memuat baris. Tanpa join itu, policy tidak
+ * bisa memutuskan apakah kepala divisi sedang membaca konten divisinya sendiri.
+ */
+export interface ContentForPolicy {
+  readonly id: string;
+  readonly createdBy: string | null;
+  readonly picId: string | null;
+  readonly divisionCode: string | null;
+}
+
+/** Permintaan kreatif, sejauh yang dibutuhkan policy. */
+export interface CreativeForPolicy {
+  readonly id: string;
+  readonly requesterId: string | null;
+  readonly picId: string | null;
+  readonly divisionCode: string | null;
+}
+
+/**
+ * Mitra sponsorship, sejauh yang dibutuhkan policy.
+ *
+ * Tidak ada `createdBy` — `partners` tidak menyimpannya. Yang berlaku:
+ * PIC + kepala divisi sponsor + owner/co_owner.
+ */
+export interface PartnerForPolicy {
+  readonly id: string;
+  readonly picId: string | null;
+  readonly divisionCode: string | null;
+}
+
+/** Barang inventaris, sejauh yang dibutuhkan policy. */
+export interface InventoryItemForPolicy {
+  readonly id: string;
+  readonly picId: string | null;
+  readonly divisionCode: string | null;
+}
+
+/** Item logistik (pengiriman/perjalanan), sejauh yang dibutuhkan policy. */
+export interface LogisticsItemForPolicy {
+  readonly id: string;
+  readonly picId: string | null;
+  readonly divisionCode: string | null;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Hasil
 // ─────────────────────────────────────────────────────────────────────────────
@@ -160,7 +215,13 @@ export type PolicyDenialReason =
   | 'transition_not_allowed'
   | 'sync_conflict_unresolved'
   | 'not_finance_division_lead'
-  | 'private_feedback_not_author';
+  | 'private_feedback_not_author'
+  | 'not_letter_editor'
+  | 'not_content_editor'
+  | 'not_creative_editor'
+  | 'not_partner_editor'
+  | 'not_inventory_editor'
+  | 'not_logistics_editor';
 
 export interface PolicyAllow {
   readonly effect: 'allow';
@@ -617,6 +678,184 @@ export function canReadFeedback(
   }
 
   return deny('private_feedback_not_author');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Persuratan
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * `PATCH /letters/{id}` — mengubah isi surat.
+ *
+ * | Peran | Boleh |
+ * |---|---|
+ * | `owner`, `co_owner` | semuanya |
+ * | `division_head`, `division_deputy` | surat yang **diajukan ke divisinya** |
+ * | `member` | surat yang **ia ajukan** atau **ia kerjakan** (PIC) |
+ *
+ * Tidak ada syarat divisi pada `member`: pengirim surat dan PIC-nya boleh
+ * mengubah dari divisi mana pun, karena surat seringkali dikerjakan lintas divisi.
+ */
+export function canEditLetter(
+  actor: Actor,
+  letter: LetterForPolicy,
+): PolicyResult {
+  if (isOwnerOrCoOwner(actor)) {
+    return allow();
+  }
+
+  if (isDivisionLead(actor)) {
+    return allow();
+  }
+
+  if (letter.requesterId === actor.id || letter.picId === actor.id) {
+    return allow();
+  }
+
+  return deny('not_letter_editor');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Konten
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * `PATCH /content/{id}` — mengubah rencana konten.
+ *
+ * | Peran | Boleh |
+ * |---|---|
+ * | `owner`, `co_owner` | semuanya |
+ * | `division_head`, `division_deputy` | konten divisinya |
+ * | `member` | konten yang **ia buat** atau **ia kerjakan** (PIC) |
+ */
+export function canEditContent(
+  actor: Actor,
+  item: ContentForPolicy,
+): PolicyResult {
+  if (isOwnerOrCoOwner(actor)) {
+    return allow();
+  }
+
+  if (leadsDivisionOf(actor, item.divisionCode)) {
+    return allow();
+  }
+
+  if (item.createdBy === actor.id || item.picId === actor.id) {
+    return allow();
+  }
+
+  return deny('not_content_editor');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Kreatif
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * `PATCH /creative/{id}` — mengubah permintaan kreatif.
+ *
+ * Pola identik dengan `canEditContent`.
+ */
+export function canEditCreative(
+  actor: Actor,
+  item: CreativeForPolicy,
+): PolicyResult {
+  if (isOwnerOrCoOwner(actor)) {
+    return allow();
+  }
+
+  if (leadsDivisionOf(actor, item.divisionCode)) {
+    return allow();
+  }
+
+  if (item.requesterId === actor.id || item.picId === actor.id) {
+    return allow();
+  }
+
+  return deny('not_creative_editor');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Mitra
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * `PATCH /partners/{id}` — mengubah data mitra.
+ *
+ * Tidak ada `createdBy` pada tabel `partners`, sehingga yang berlaku adalah:
+ * PIC + kepala divisi yang menangani + owner/co_owner.
+ */
+export function canEditPartner(
+  actor: Actor,
+  partner: PartnerForPolicy,
+): PolicyResult {
+  if (isOwnerOrCoOwner(actor)) {
+    return allow();
+  }
+
+  if (leadsDivisionOf(actor, partner.divisionCode)) {
+    return allow();
+  }
+
+  if (partner.picId === actor.id) {
+    return allow();
+  }
+
+  return deny('not_partner_editor');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Inventaris
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * `PATCH /inventory/{id}` — mengubah data barang inventaris.
+ *
+ * Pola sama dengan `canEditPartner` — tidak ada `createdBy`.
+ */
+export function canEditInventoryItem(
+  actor: Actor,
+  item: InventoryItemForPolicy,
+): PolicyResult {
+  if (isOwnerOrCoOwner(actor)) {
+    return allow();
+  }
+
+  if (leadsDivisionOf(actor, item.divisionCode)) {
+    return allow();
+  }
+
+  if (item.picId === actor.id) {
+    return allow();
+  }
+
+  return deny('not_inventory_editor');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Logistik
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * `PATCH /logistics/shipments/{id}` dan `PATCH /logistics/trips/{id}`.
+ */
+export function canEditLogistics(
+  actor: Actor,
+  item: LogisticsItemForPolicy,
+): PolicyResult {
+  if (isOwnerOrCoOwner(actor)) {
+    return allow();
+  }
+
+  if (leadsDivisionOf(actor, item.divisionCode)) {
+    return allow();
+  }
+
+  if (item.picId === actor.id) {
+    return allow();
+  }
+
+  return deny('not_logistics_editor');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
