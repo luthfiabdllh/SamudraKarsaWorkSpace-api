@@ -118,15 +118,42 @@ export const DOCUMENT_NUMBER_FORMATS = {
 >;
 
 /**
+ * Menormalkan varian surat: huruf besar, tanpa spasi.
+ *
+ * **Diekspor, dan itu penting.** Varian dipakai dua tempat: sebagai **kunci**
+ * baris penghitung dan sebagai **isi** nomor yang dicetak. Kalau keduanya
+ * menormalkan dengan cara yang berbeda — satu menerima `'und'`, yang lain
+ * menolaknya — maka `'und'` dan `'UND'` menjadi dua deret surat undangan yang
+ * masing-masing mulai dari satu. Yang lebih buruk: nomor yang tersimpan di
+ * kolomnya bisa berbeda dari nomor yang dihitung ulang dari kuncinya.
+ *
+ * Karena itu normalisasinya satu fungsi, dipakai `formatDocumentNumber` dan
+ * `NumberingService`.
+ *
+ * Varian kosong **dilempar**, tidak diberi cadangan `'UMUM'` seperti di
+ * `sksks`. Cadangan itu membuat nomornya tetap terbentuk, sehingga surat tanpa
+ * jenis tidak pernah ketahuan.
+ */
+export function normalizeDocumentVariant(
+  variant: string | undefined,
+  prefix: string,
+): string {
+  const normalized = (variant ?? '').trim().toUpperCase().replace(/\s+/g, '_');
+
+  if (normalized === '') {
+    throw new Error(
+      `Nomor ${prefix} menuntut varian (jenis), tetapi tidak ada yang diberikan.`,
+    );
+  }
+
+  return normalized;
+}
+
+/**
  * Menyusun nomor dari bentuk di atas.
  *
  * `'SRT-UND-2026-00001'` atau `'WI-2026-00001'`. Fungsi murni — tidak menyentuh
  * database, dan karena itu bisa diuji tanpa satu pun koneksi.
- *
- * **Tidak ada cadangan `'UMUM'`.** `sksks` memakai cadangan itu untuk surat yang
- * jenisnya kosong, dan justru itulah masalahnya: nomornya tetap terbentuk,
- * sehingga surat tanpa jenis tidak pernah ketahuan. Di sini varian yang kosong
- * **dilempar sebagai galat**, dan `letters.letter_kind` memang `not null`.
  */
 export function formatDocumentNumber(
   type: (typeof documentTypeEnum.enumValues)[number],
@@ -138,18 +165,7 @@ export function formatDocumentNumber(
   const parts: string[] = [format.prefix];
 
   if ('usesVariant' in format && format.usesVariant) {
-    const normalized = (variant ?? '')
-      .trim()
-      .toUpperCase()
-      .replace(/\s+/g, '_');
-
-    if (normalized === '') {
-      throw new Error(
-        `Nomor ${format.prefix} menuntut varian (jenis), tetapi tidak ada yang diberikan.`,
-      );
-    }
-
-    parts.push(normalized);
+    parts.push(normalizeDocumentVariant(variant, format.prefix));
   }
 
   parts.push(String(year), String(sequence).padStart(format.width, '0'));

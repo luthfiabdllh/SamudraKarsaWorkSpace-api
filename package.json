@@ -20,6 +20,7 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
+    "db:seed": "node --env-file=.env dist/database/seed.js",
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {

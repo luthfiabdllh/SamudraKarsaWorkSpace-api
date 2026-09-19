@@ -15,9 +15,13 @@ import { AppConfigModule } from './config/config.module';
 import { AuditModule } from './audit/audit.module';
 import { DatabaseModule } from './database/database.module';
 import { HealthModule } from './health/health.module';
+import { OrganizationModule } from './organization/organization.module';
 import { PolicyGuard } from './policy/policy.guard';
 import { PolicyModule } from './policy/policy.module';
+import { ProfilesModule } from './profiles/profiles.module';
 import { RateLimitModule } from './rate-limit/rate-limit.module';
+import { RequestsModule } from './requests/requests.module';
+import { WorkItemsModule } from './work-items/work-items.module';
 
 /**
  * Akar aplikasi.
@@ -43,6 +47,10 @@ import { RateLimitModule } from './rate-limit/rate-limit.module';
     AuthModule,
     PolicyModule,
     HealthModule,
+    OrganizationModule,
+    ProfilesModule,
+    WorkItemsModule,
+    RequestsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: PolicyGuard },

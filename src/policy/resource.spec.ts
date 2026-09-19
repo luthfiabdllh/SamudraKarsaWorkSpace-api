@@ -506,9 +506,17 @@ describe('peran yang tidak dikenal', () => {
     // Peran datang dari klaim token, dan klaim token tidak dijamin TypeScript —
     // itu alasan yang sama dengan yang membuat `PolicyGuard` menutup cabang
     // `never`-nya dengan penolakan, bukan dengan tebakan.
+    //
+    // `as unknown as Role[]` — bukan `as unknown as Role`. Yang dipalsukan di
+    // sini adalah **isinya sebuah daftar**, jadi yang harus dinyatakan sebagai
+    // `Role` adalah elemennya, bukan daftarnya. Bentuk sebelumnya menyatakan
+    // seluruh daftar sebagai satu peran, dan itu tidak pernah lolos pemeriksaan
+    // tipe: `tsconfig.build.json` mengecualikan berkas spec, sehingga
+    // `npm run build` tidak pernah melihatnya — tetapi `tsc --noEmit` dan
+    // pemeriksaan tipe di CI mana pun akan berhenti di baris ini.
     const ghost: Actor = {
       id: 'p-ghost',
-      roles: ['not_a_role'] as unknown as Role,
+      roles: ['not_a_role'] as unknown as Role[],
       divisionCodes: ['medkre'],
     };
 

@@ -94,6 +94,19 @@ import { TokenService } from './token.service';
       useClass: JwtAuthVerifier,
     },
   ],
-  exports: [AUTH_VERIFIER, AuthService],
+  /**
+   * `PasswordService` dan `TokenService` ikut diekspor sejak modul `profiles`
+   * ada, dan bukan karena kelengkapan.
+   *
+   * Keduanya dibutuhkan di luar auth untuk dua hal yang **memang** bukan urusan
+   * auth: `profiles` membuatkan password sementara (keputusan 10), dan ia harus
+   * mencabut seluruh sesi seseorang saat orang itu dinonaktifkan atau
+   * passwordnya diganti orang lain.
+   *
+   * Yang **tidak** dilakukan: menyalin logikanya. Penyalinan berarti dua
+   * parameter argon2 yang bisa menyimpang, dan dua cara mencabut sesi yang bisa
+   * berbeda satu sama lain — pada dua hal yang justru harus persis sama.
+   */
+  exports: [AUTH_VERIFIER, AuthService, PasswordService, TokenService],
 })
 export class AuthModule {}

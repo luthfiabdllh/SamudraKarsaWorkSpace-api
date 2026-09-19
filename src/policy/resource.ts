@@ -120,6 +120,16 @@ export interface RequestForPolicy {
   readonly requesterId: string | null;
   /** Divisi **tujuan**, bukan divisi pemohon — §7.9 memakai yang ini. */
   readonly targetDivisionCode: string | null;
+  /**
+   * Penanggung jawab yang ditunjuk divisi tujuan.
+   *
+   * Ada di sini karena `canEditRequest` memberinya hak mengubah, mengikuti pola
+   * yang sama dengan pekerjaan (keputusan 36 dan 44): yang boleh mengubah sebuah
+   * baris adalah pembuatnya, kepala divisinya, **dan orang yang mengerjakannya**.
+   * Untuk permintaan, "orang yang mengerjakannya" adalah penanggung jawab yang
+   * ditunjuk — bukan pemohon, yang tidak mengerjakan apa pun setelah mengajukan.
+   */
+  readonly assignedPicId: string | null;
   readonly syncConflictAt: Date | null;
 }
 
@@ -425,6 +435,74 @@ export function canTransitionRequest(
   }
 
   return deny('not_target_division_lead');
+}
+
+/**
+ * `PATCH /requests/{id}` — mengubah isi permintaan.
+ *
+ * **Tidak ada barisnya di §7.9.** Tabel itu hanya memuat
+ * `POST /requests/{id}/transitions`, karena yang dibahasnya adalah alurnya.
+ * Wewenang mengubah isinya mengikuti **keputusan 36**: domain tanpa konsep
+ * "pembuat/PIC" memakai pola yang sama — yang boleh mengubah adalah pembuat
+ * baris, kepala divisinya, dan owner/co-owner. Di sini:
+ *
+ * | Peran | Boleh mengubah |
+ * |---|---|
+ * | `owner`, `co_owner` | semuanya |
+ * | `division_head`, `division_deputy` | permintaan yang **divisi tujuannya** ia pimpin |
+ * | `member` | permintaan yang **ia ajukan**, dan permintaan yang **ia kerjakan** |
+ *
+ * Divisi yang dibandingkan adalah divisi **tujuan**, bukan divisi pemohon, dan
+ * itu mengikuti §7.9 apa adanya: yang berkepentingan atas isi sebuah permintaan
+ * adalah divisi yang akan mengerjakannya. Kepala divisi pemohon tidak ikut —
+ * permintaan diajukan **kepada** orang lain, dan mengubahnya setelah terkirim
+ * bukan wewenang pengirimnya.
+ *
+ * Pemohonnya sendiri **ikut**, dan itu bukan kelonggaran: §7.9 membiarkannya
+ * mengajukan dan melengkapi (`need_clarification → submitted`), dan melengkapi
+ * berarti mengubah isinya. Melarangnya mengubah berarti memaksanya menjawab
+ * pertanyaan klarifikasi lewat jalur yang tidak ada.
+ */
+export function canEditRequest(
+  actor: Actor,
+  request: RequestForPolicy,
+): PolicyResult {
+  if (isOwnerOrCoOwner(actor)) {
+    return allow();
+  }
+
+  if (leadsDivisionOf(actor, request.targetDivisionCode)) {
+    return allow();
+  }
+
+  if (request.requesterId === actor.id || request.assignedPicId === actor.id) {
+    return allow();
+  }
+
+  return deny('not_creator_pic_or_assignee');
+}
+
+/**
+ * `DELETE /requests/{id}` — soft delete.
+ *
+ * Sama dengan `canEditRequest` **tanpa** cabang anggota, persis seperti
+ * `canDeleteWorkItem` terhadap `canEditWorkItem`: §7.9 tidak memuat baris ini,
+ * dan yang dipakai adalah pola keputusan 36 apa adanya. Sebuah anggota boleh
+ * mengubah permintaannya sepanjang hari; menghapusnya bukan wewenangnya.
+ */
+export function canDeleteRequest(
+  actor: Actor,
+  request: RequestForPolicy,
+): PolicyResult {
+  if (isOwnerOrCoOwner(actor)) {
+    return allow();
+  }
+
+  if (leadsDivisionOf(actor, request.targetDivisionCode)) {
+    return allow();
+  }
+
+  return deny('not_division_lead_for_row');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
