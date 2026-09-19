@@ -1,0 +1,6 @@
+# Berkas ini menjaga direktori migrasi tetap ada di git.
+#
+# Migrasi dihasilkan drizzle-kit dengan `npm run db:generate`:
+#   bernomor, naik saja, TIDAK PERNAH diubah setelah dijalankan (§8.4).
+#
+# Jangan hapus berkas ini sampai migrasi pertama benar-benar ada.

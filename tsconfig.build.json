@@ -1,0 +1,23 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "./src",
+
+    // `incremental` dimatikan di sini, dan alasannya konkret.
+    //
+    // `nest-cli.json` menyetel `deleteOutDir: true`, jadi setiap build menghapus
+    // `dist/` lebih dulu. Tapi berkas informasi incremental-nya
+    // (`tsconfig.build.tsbuildinfo`) diletakkan di **root proyek**, bukan di
+    // dalam `dist/` — jadi ia selamat dari penghapusan dan memberi tahu tsc
+    // bahwa semuanya sudah pernah di-emit.
+    //
+    // Hasilnya: `nest build` melaporkan sukses, tetapi hanya meng-emit berkas
+    // yang kebetulan berubah sejak build terakhir. `dist/main.js` tidak pernah
+    // dibuat ulang — dan `npm run start:prod` maupun `api/index.js` di Vercel
+    // sama-sama menunjuk berkas yang tidak ada.
+    //
+    // Build penuh adalah harga yang murah untuk `dist/` yang bisa dipercaya.
+    "incremental": false
+  },
+  "exclude": ["node_modules", "test", "dist", "**/*spec.ts", "drizzle.config.ts"]
+}

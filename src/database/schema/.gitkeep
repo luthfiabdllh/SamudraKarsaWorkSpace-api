@@ -1,0 +1,8 @@
+# Skema Drizzle.
+
+Berkas `*.ts` di direktori ini dirakit oleh `drizzle-kit` menjadi migrasi SQL
+bernomor di `../migrations/`. Bentuknya: satu berkas per tabel, lalu satu
+`index.ts` yang merakitnya.
+
+Belum ada tabel di sini. Skema tabel pertama ditulis di Fase 1 lanjutan —
+`npm run db:generate` baru menghasilkan sesuatu setelah itu.
