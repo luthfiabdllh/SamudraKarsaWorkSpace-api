@@ -1,0 +1,46 @@
+name: Database Backup
+
+on:
+  schedule:
+    - cron: '0 2 * * *' # Setiap hari jam 02:00 UTC
+  workflow_dispatch:
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install PostgreSQL Client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Create Backup
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          pg_dump $DATABASE_URL -F c -f backup-$(date +%F).dump
+
+      - name: Configure AWS CLI for Cloudflare R2
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.R2_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          aws-region: auto
+
+      - name: Upload to Cloudflare R2
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+        run: |
+          aws s3 cp backup-$(date +%F).dump s3://$R2_BUCKET/backups/backup-$(date +%F).dump \
+            --endpoint-url https://$R2_ACCOUNT_ID.r2.cloudflarestorage.com
+
+      - name: Notify on Failure
+        if: failure()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          curl -H "Content-Type: application/json" \
+               -d '{"content": "🚨 **[URGENT]** Gagal melakukan backup database Samudra Karsa! Segera periksa GitHub Actions."}' \
+               $DISCORD_WEBHOOK_URL

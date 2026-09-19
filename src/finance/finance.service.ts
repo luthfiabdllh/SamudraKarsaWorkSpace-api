@@ -5,7 +5,7 @@ import {
   NotFoundException,
   PreconditionFailedException,
 } from '@nestjs/common';
-import { and, eq, isNull, type SQL } from 'drizzle-orm';
+import { and, desc, eq, isNull, type SQL } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import { AuditService } from '../audit/audit.service';
@@ -16,6 +16,8 @@ import {
   type DbExecutor,
 } from '../numbering/numbering.service';
 import { canReadFinance, type Actor } from '../policy/resource';
+import { StorageService } from '../storage/storage.service';
+import type { AuthenticatedUser } from '../common/types/express';
 import type {
   CreateBudgetDto,
   CreateBudgetItemDto,
@@ -41,6 +43,7 @@ export class FinanceService {
     @Inject(DRIZZLE) private readonly db: NodePgDatabase,
     private readonly audit: AuditService,
     private readonly numbering: NumberingService,
+    private readonly storage: StorageService,
   ) {}
 
   // ─── Guard keuangan ────────────────────────────────────────────────────────
@@ -516,5 +519,33 @@ export class FinanceService {
         'Versi tidak cocok. Data sudah diubah orang lain — muat ulang lalu coba lagi.',
       );
     }
+  }
+
+  // ─── Ekspor ────────────────────────────────────────────────────────────────
+
+  async exportTransactions(actor: AuthenticatedUser): Promise<{ url: string }> {
+    this.assertFinanceAccess(actor);
+
+    // Ambil semua transaksi
+    const list = await this.db.select().from(transactions).orderBy(desc(transactions.transactionDate));
+
+    // Konversi ke CSV (sederhana)
+    const header = ['ID', 'Tanggal', 'Nominal', 'Metode Pembayaran', 'Status', 'Mitra'].join(',');
+    const rows = list.map((tx) =>
+      [
+        tx.id,
+        tx.transactionDate,
+        tx.amount,
+        tx.paymentMethod ?? '',
+        tx.status,
+        `"${(tx.counterparty ?? '').replace(/"/g, '""')}"`, // escape quotes
+      ].join(','),
+    );
+    const csvContent = [header, ...rows].join('\n');
+
+    const fileName = `exports/transactions-${new Date().getTime()}.csv`;
+    const url = await this.storage.uploadAndGetDownloadUrl(fileName, csvContent, 'text/csv', 3600);
+
+    return { url };
   }
 }

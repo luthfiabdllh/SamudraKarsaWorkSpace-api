@@ -32,6 +32,8 @@ import { CreativeModule } from './creative/creative.module';
 import { PartnersModule } from './partners/partners.module';
 import { InventoryModule } from './inventory/inventory.module';
 import { LogisticsModule } from './logistics/logistics.module';
+import { StorageModule } from './storage/storage.module';
+import { SwaggerModule } from './swagger/swagger.module';
 
 /**
  * Akar aplikasi.
@@ -78,6 +80,8 @@ import { LogisticsModule } from './logistics/logistics.module';
     PartnersModule,
     InventoryModule,
     LogisticsModule,
+    StorageModule,
+    SwaggerModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: PolicyGuard },

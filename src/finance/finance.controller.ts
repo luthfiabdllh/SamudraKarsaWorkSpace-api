@@ -138,6 +138,12 @@ export class FinanceController {
     return this.finance.listTransactions(query, this.actor(req));
   }
 
+  @Get('transactions/export')
+  @Policy('finance:read')
+  exportTransactions(@Req() req: Request) {
+    return this.finance.exportTransactions(this.actor(req));
+  }
+
   @Get('transactions/:id')
   @Policy('finance:read')
   getTransaction(@Param('id') id: string, @Req() req: Request) {
