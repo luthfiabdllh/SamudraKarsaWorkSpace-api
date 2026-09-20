@@ -11,6 +11,7 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 import { ZodValidationPipe } from './common/pipes/zod-validation.pipe';
+import { RateLimitGuard } from './rate-limit/rate-limit.guard';
 import { AppConfigModule } from './config/config.module';
 import { AuditModule } from './audit/audit.module';
 import { DatabaseModule } from './database/database.module';
@@ -104,7 +105,14 @@ import { AttachmentsModule } from './attachments/attachments.module';
     AttachmentsModule,
   ],
   providers: [
-    { provide: APP_GUARD, useClass: PolicyGuard },
+    {
+      provide: APP_GUARD,
+      useClass: RateLimitGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: PolicyGuard,
+    },
     { provide: APP_PIPE, useClass: ZodValidationPipe },
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
     { provide: APP_INTERCEPTOR, useClass: LoggingInterceptor },
