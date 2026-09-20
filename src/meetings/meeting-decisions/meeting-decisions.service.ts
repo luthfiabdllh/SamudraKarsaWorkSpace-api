@@ -94,6 +94,7 @@ export class MeetingDecisionsService {
 
     const [updated] = await this.db
       .update(meetingDecisions)
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
       .set(updates as any)
       .where(eq(meetingDecisions.id, id))
       .returning();

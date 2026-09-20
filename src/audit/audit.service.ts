@@ -3,6 +3,8 @@ import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import { DRIZZLE } from '../database/database.constants';
 import { activityLogs } from '../database/schema/system';
+import { ListAuditDto } from './dto/audit.dto';
+import { and, desc, eq, SQL } from 'drizzle-orm';
 
 /**
  * Satu baris catatan audit.
@@ -67,5 +69,43 @@ export class AuditService {
         error as Error,
       );
     }
+  }
+
+  async list(dto: ListAuditDto) {
+    const conditions: SQL[] = [];
+
+    if (dto.entityType) {
+      conditions.push(eq(activityLogs.entityType, dto.entityType));
+    }
+    if (dto.entityId) {
+      conditions.push(eq(activityLogs.entityId, dto.entityId));
+    }
+    if (dto.actorId) {
+      conditions.push(eq(activityLogs.actorId, dto.actorId));
+    }
+    if (dto.action) {
+      conditions.push(eq(activityLogs.action, dto.action));
+    }
+
+    const rows = await this.db
+      .select({
+        id: activityLogs.id,
+        actorId: activityLogs.actorId,
+        action: activityLogs.action,
+        entityType: activityLogs.entityType,
+        entityId: activityLogs.entityId,
+        beforeData: activityLogs.beforeData,
+        afterData: activityLogs.afterData,
+        requestId: activityLogs.requestId,
+        ipAddress: activityLogs.ipAddress,
+        createdAt: activityLogs.createdAt,
+      })
+      .from(activityLogs)
+      .where(conditions.length ? and(...conditions) : undefined)
+      .orderBy(desc(activityLogs.createdAt))
+      .limit(dto.limit ?? 50)
+      .offset(dto.offset ?? 0);
+
+    return rows;
   }
 }

@@ -127,6 +127,7 @@ export class MilestonesService {
 
       const [updated] = await tx
         .update(milestones)
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
         .set(updates as any)
         .where(eq(milestones.id, id))
         .returning({ version: milestones.version });

@@ -492,8 +492,45 @@ export class AuthService {
     return this.toActor(profile);
   }
 
+  /**
+   * Re-autentikasi untuk tindakan destruktif tingkat tinggi (seperti Hapus Permanen).
+   * Sengaja memakai ConflictException agar UI dapat menangkapnya dan memberitahu pengguna.
+   */
+  async verifyReauthPassword(
+    actorId: string,
+    passwordToVerify: string,
+  ): Promise<void> {
+    const profile = await this.loadProfileById(actorId);
+
+    if (!profile || profile.status === 'inactive') {
+      throw this.loginFailed();
+    }
+
+    if (profile.passwordHash === null) {
+      throw new ConflictException({
+        code: 'no_password_set',
+        title: 'Akun ini belum punya sandi',
+        detail:
+          'Tindakan ini mewajibkan sandi. Tetapkan sandi terlebih dahulu.',
+      });
+    }
+
+    const matches = await this.passwords.verifyPassword(
+      profile.passwordHash,
+      passwordToVerify,
+    );
+
+    if (!matches) {
+      throw new ConflictException({
+        code: 'current_password_mismatch',
+        title: 'Sandi tidak cocok',
+        detail: 'Re-autentikasi gagal. Sandi yang Anda masukkan salah.',
+      });
+    }
+  }
+
   // ───────────────────────────────────────────────────────────────────────────
-  // Internal
+  // Metode Internal
   // ───────────────────────────────────────────────────────────────────────────
 
   /**

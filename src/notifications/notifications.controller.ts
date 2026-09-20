@@ -12,7 +12,7 @@ export class NotificationsController {
   private actor(req: Request): AuthenticatedUser {
     const actor = req.user;
     if (!actor) throw new Error('Aktor tidak ditemukan.');
-    return actor as AuthenticatedUser;
+    return actor;
   }
 
   @Get()

@@ -166,6 +166,7 @@ export class CalendarService {
 
       const [updated] = await tx
         .update(calendarEvents)
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
         .set(updates as any)
         .where(eq(calendarEvents.id, id))
         .returning({ version: calendarEvents.version });

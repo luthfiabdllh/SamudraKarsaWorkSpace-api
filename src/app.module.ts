@@ -21,7 +21,10 @@ import { OrganizationModule } from './organization/organization.module';
 import { PolicyGuard } from './policy/policy.guard';
 import { PolicyModule } from './policy/policy.module';
 import { ProfilesModule } from './profiles/profiles.module';
+import { RecycleBinModule } from './recycle-bin/recycle-bin.module';
 import { RateLimitModule } from './rate-limit/rate-limit.module';
+import { ReportsModule } from './reports/reports.module';
+import { SettingsModule } from './settings/settings.module';
 import { RequestsModule } from './requests/requests.module';
 import { WorkItemsModule } from './work-items/work-items.module';
 import { LettersModule } from './letters/letters.module';
@@ -78,6 +81,9 @@ import { AttachmentsModule } from './attachments/attachments.module';
     OrganizationModule,
     ProfilesModule,
     WorkItemsModule,
+    RecycleBinModule,
+    ReportsModule,
+    SettingsModule,
     RequestsModule,
     LettersModule,
     FinanceModule,

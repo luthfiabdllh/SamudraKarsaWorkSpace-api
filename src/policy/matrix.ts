@@ -320,6 +320,16 @@ export const ROLE_POLICY_MATRIX = {
   'member:admin': ['owner', 'co_owner'],
   'audit:read': ['owner', 'co_owner'],
 
+  // Pengaturan Sistem
+  'settings:read': [
+    'owner',
+    'co_owner',
+    'division_head',
+    'division_deputy',
+    'member',
+  ],
+  'settings:write': ['owner', 'co_owner'],
+
   /**
    * Data acuan organisasi — divisi, cluster, subunit, periode.
    *
