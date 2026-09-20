@@ -259,11 +259,61 @@ export const ROLE_POLICY_MATRIX = {
   'logistics:delete': ['owner', 'co_owner', 'division_head', 'division_deputy'],
 
   // Pengumuman
+  'announcement:read': [
+    'owner',
+    'co_owner',
+    'division_head',
+    'division_deputy',
+    'member',
+  ],
   'announcement:create': [
     'owner',
     'co_owner',
     'division_head',
     'division_deputy',
+  ],
+  'announcement:write': [
+    'owner',
+    'co_owner',
+    'division_head',
+    'division_deputy',
+  ],
+  'announcement:delete': [
+    'owner',
+    'co_owner',
+    'division_head',
+    'division_deputy',
+  ],
+
+  // Kolaborasi (Meetings, Calendar)
+  'collaboration:read': [
+    'owner',
+    'co_owner',
+    'division_head',
+    'division_deputy',
+    'member',
+  ],
+  'collaboration:write': [
+    'owner',
+    'co_owner',
+    'division_head',
+    'division_deputy',
+    'member',
+  ],
+  'collaboration:delete': [
+    'owner',
+    'co_owner',
+    'division_head',
+    'division_deputy',
+  ],
+
+  // Notifikasi
+  'notification:read': [
+    'owner',
+    'co_owner',
+    'division_head',
+    'division_deputy',
+    'member',
   ],
 
   // Administrasi
@@ -299,6 +349,22 @@ export const ROLE_POLICY_MATRIX = {
     'member',
   ],
   'organization:write': ['owner', 'co_owner'],
+
+  // Evaluasi
+  'evaluation:read': [
+    'owner',
+    'co_owner',
+    'division_head',
+    'division_deputy',
+    'member',
+  ],
+  'evaluation:write': [
+    'owner',
+    'co_owner',
+    'division_head',
+    'division_deputy',
+    'member',
+  ],
 
   /**
    * Profil anggota.

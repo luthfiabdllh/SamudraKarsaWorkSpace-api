@@ -76,4 +76,46 @@ export class StorageService {
       );
     }
   }
+
+  async getPresignedUploadUrl(
+    key: string,
+    contentType: string,
+    expiresIn: number = 3600,
+  ): Promise<string> {
+    try {
+      const url = await getSignedUrl(
+        this.s3Client,
+        new PutObjectCommand({
+          Bucket: this.bucket,
+          Key: key,
+          ContentType: contentType,
+        }),
+        { expiresIn },
+      );
+      return url;
+    } catch (err) {
+      console.error('Gagal menghasilkan presigned upload URL:', err);
+      throw new InternalServerErrorException('Gagal menghasilkan URL unggah');
+    }
+  }
+
+  async getPresignedDownloadUrl(
+    key: string,
+    expiresIn: number = 3600,
+  ): Promise<string> {
+    try {
+      const url = await getSignedUrl(
+        this.s3Client,
+        new GetObjectCommand({
+          Bucket: this.bucket,
+          Key: key,
+        }),
+        { expiresIn },
+      );
+      return url;
+    } catch (err) {
+      console.error('Gagal menghasilkan presigned download URL:', err);
+      throw new InternalServerErrorException('Gagal menghasilkan URL unduh');
+    }
+  }
 }

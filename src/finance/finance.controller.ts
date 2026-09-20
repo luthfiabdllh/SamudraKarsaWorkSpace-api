@@ -132,12 +132,7 @@ export class FinanceController {
     @Body() dto: UpdateBudgetItemDto,
     @Req() req: Request,
   ) {
-    return this.finance.updateBudgetItem(
-      id,
-      itemId,
-      dto,
-      this.actor(req),
-    );
+    return this.finance.updateBudgetItem(id, itemId, dto, this.actor(req));
   }
 
   @Delete('budgets/:id/items/:itemId')

@@ -34,6 +34,13 @@ import { InventoryModule } from './inventory/inventory.module';
 import { LogisticsModule } from './logistics/logistics.module';
 import { StorageModule } from './storage/storage.module';
 import { SwaggerModule } from './swagger/swagger.module';
+import { MeetingsModule } from './meetings/meetings.module';
+import { CalendarModule } from './calendar/calendar.module';
+import { MilestonesModule } from './milestones/milestones.module';
+import { AnnouncementsModule } from './announcements/announcements.module';
+import { FeedbackModule } from './feedback/feedback.module';
+import { NotificationsModule } from './notifications/notifications.module';
+import { AttachmentsModule } from './attachments/attachments.module';
 
 /**
  * Akar aplikasi.
@@ -82,6 +89,13 @@ import { SwaggerModule } from './swagger/swagger.module';
     LogisticsModule,
     StorageModule,
     SwaggerModule,
+    MeetingsModule,
+    CalendarModule,
+    MilestonesModule,
+    AnnouncementsModule,
+    FeedbackModule,
+    NotificationsModule,
+    AttachmentsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: PolicyGuard },
