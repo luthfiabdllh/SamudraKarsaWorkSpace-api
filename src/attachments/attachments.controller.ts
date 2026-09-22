@@ -19,7 +19,7 @@ import { RequestPresignedUrlDto } from './dto/attachments.dto';
 import { AttachmentsService } from './attachments.service';
 import type { WriteContext } from '../meetings/meetings.service';
 
-@Controller('v1/attachments')
+@Controller('attachments')
 export class AttachmentsController {
   constructor(private readonly attachments: AttachmentsService) {}
 

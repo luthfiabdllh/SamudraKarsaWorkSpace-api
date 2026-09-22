@@ -25,7 +25,7 @@ import {
 } from './dto/meetings.dto';
 import { MeetingsService, type WriteContext } from './meetings.service';
 
-@Controller('v1/meetings')
+@Controller('meetings')
 export class MeetingsController {
   constructor(private readonly meetings: MeetingsService) {}
 

@@ -5,7 +5,7 @@ import type { AuthenticatedUser } from '../common/types/express';
 import { Policy } from '../policy/policy.decorator';
 import { NotificationsService } from './notifications.service';
 
-@Controller('v1/notifications')
+@Controller('notifications')
 export class NotificationsController {
   constructor(private readonly notifications: NotificationsService) {}
 

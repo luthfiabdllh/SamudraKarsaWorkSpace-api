@@ -45,6 +45,8 @@ import { AnnouncementsModule } from './announcements/announcements.module';
 import { FeedbackModule } from './feedback/feedback.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { AttachmentsModule } from './attachments/attachments.module';
+import { WorkflowModule } from './workflow/workflow.module';
+import { NumberingModule } from './numbering/numbering.module';
 
 /**
  * Akar aplikasi.
@@ -103,6 +105,8 @@ import { AttachmentsModule } from './attachments/attachments.module';
     FeedbackModule,
     NotificationsModule,
     AttachmentsModule,
+    WorkflowModule,
+    NumberingModule,
   ],
   providers: [
     {

@@ -21,7 +21,7 @@ import { CreateMilestoneDto, UpdateMilestoneDto } from './dto/milestones.dto';
 import { MilestonesService } from './milestones.service';
 import type { WriteContext } from '../meetings/meetings.service';
 
-@Controller('v1/milestones')
+@Controller('milestones')
 export class MilestonesController {
   constructor(private readonly milestones: MilestonesService) {}
 

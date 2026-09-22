@@ -24,7 +24,7 @@ import {
 import { AnnouncementsService } from './announcements.service';
 import type { WriteContext } from '../meetings/meetings.service';
 
-@Controller('v1/announcements')
+@Controller('announcements')
 export class AnnouncementsController {
   constructor(private readonly announcements: AnnouncementsService) {}
 

@@ -23,7 +23,7 @@ import {
 import { MeetingDecisionsService } from './meeting-decisions.service';
 import type { WriteContext } from '../meetings.service';
 
-@Controller('v1/meetings/:meetingId/decisions')
+@Controller('meetings/:meetingId/decisions')
 export class MeetingDecisionsController {
   constructor(private readonly decisions: MeetingDecisionsService) {}
 

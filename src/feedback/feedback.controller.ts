@@ -8,7 +8,7 @@ import { CreateFeedbackDto } from './dto/feedback.dto';
 import { FeedbackService } from './feedback.service';
 import type { WriteContext } from '../meetings/meetings.service';
 
-@Controller('v1/feedback')
+@Controller('feedback')
 export class FeedbackController {
   constructor(private readonly feedback: FeedbackService) {}
 

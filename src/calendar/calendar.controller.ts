@@ -26,7 +26,7 @@ import {
 import { CalendarService } from './calendar.service';
 import type { WriteContext } from '../meetings/meetings.service';
 
-@Controller('v1/calendar/events')
+@Controller('calendar/events')
 export class CalendarController {
   constructor(private readonly calendar: CalendarService) {}
 
