@@ -6,6 +6,7 @@
 // memuatnya lebih dulu; skrip ini tidak memuat `@nestjs/core` sama sekali,
 // sehingga tanpa baris ini kelasnya gagal **saat berkasnya dibaca** — jauh
 // sebelum satu baris pun di bawah sempat berjalan.
+import 'dotenv/config';
 import 'reflect-metadata';
 
 import { drizzle } from 'drizzle-orm/node-postgres';

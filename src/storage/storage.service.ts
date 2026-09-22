@@ -24,9 +24,15 @@ export class StorageService {
       );
     }
 
+    const customEndpoint = this.config.get<string>('R2_ENDPOINT');
+    const endpoint =
+      customEndpoint ??
+      (accountId ? `https://${accountId}.r2.cloudflarestorage.com` : undefined);
+
     this.s3Client = new S3Client({
       region: 'auto',
-      endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
+      ...(endpoint ? { endpoint } : {}),
+      forcePathStyle: !!customEndpoint,
       credentials: {
         accessKeyId: accessKeyId ?? '',
         secretAccessKey: secretAccessKey ?? '',
