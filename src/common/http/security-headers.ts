@@ -1,3 +1,4 @@
+import type { NextFunction, Request, Response } from 'express';
 import helmet from 'helmet';
 
 /**
@@ -35,101 +36,21 @@ import helmet from 'helmet';
 export function securityHeaders(nodeEnv: string) {
   /**
    * HSTS hanya dikirim di produksi.
-   *
-   * ## Kenapa ini satu-satunya header yang dibuat bersyarat
-   *
-   * `max-age=31536000` adalah janji yang dipegang **browser**, bukan server:
-   * setelah menerimanya, browser menolak berbicara HTTP biasa dengan host itu
-   * selama setahun, dan server tidak punya cara menariknya kembali. Untuk
-   * `localhost` — yang diakses lewat HTTP dan tidak punya sertifikat — janji
-   * itu membuat pengembangnya terkunci dari API-nya sendiri, dan membukanya
-   * kembali menuntut orang membersihkan daftar HSTS di browsernya, sebuah
-   * langkah yang tidak diketahui sebagian besar orang.
-   *
-   * Aman dikaitkan ke `NODE_ENV` karena Vercel menetapkannya `production`
-   * sendiri pada setiap deployment produksi — jadi tidak ada keadaan di mana
-   * header ini hilang di produksi hanya karena seseorang lupa menyalin
-   * variabel.
-   *
-   * Kalau suatu saat proyek ini di-deploy ke tempat yang **tidak**
-   * menetapkan `NODE_ENV`, cabang ini yang harus diperiksa lebih dulu: ia akan
-   * diam-diam mematikan HSTS, dan itu kegagalan yang tidak bersuara.
-   *
-   * `preload` sengaja tetap `false`. Preload berarti hostname-nya didaftarkan
-   * ke daftar bawaan browser — dan pendaftaran itu jauh lebih lambat dicabut
-   * daripada HSTS biasa. Ia keputusan tersendiri, bukan bawaan yang ikut
-   * terbawa.
    */
   const strictTransportSecurity =
     nodeEnv === 'production'
       ? { maxAge: 31536000, includeSubDomains: true, preload: false }
       : false;
 
-  return helmet({
+  /**
+   * Helmet standar untuk seluruh 48 endpoint API:
+   * Menggunakan `default-src 'none'` yang sangat ketat karena API hanya
+   * menyajikan data JSON, bukan HTML/CSS/JS.
+   */
+  const apiHelmet = helmet({
     strictTransportSecurity,
-
-    /**
-     * `DENY`, bukan bawaan `SAMEORIGIN`.
-     *
-     * Bawaan `helmet` mengizinkan halaman dari origin yang sama membingkai
-     * respons ini. Untuk API yang tidak punya halaman sama sekali, izin itu
-     * tidak memberi manfaat apa pun — sementara `DENY` menutup satu kelas
-     * serangan yang seluruhnya bergantung pada kemampuan membingkai.
-     *
-     * `frame-ancestors 'none'` di CSP di bawah menyatakan hal yang sama, dan
-     * bagi browser modern ia yang berlaku. Keduanya dipasang karena §7.18
-     * meminta `X-Frame-Options`, dan karena pembaca lama masih mengenainya.
-     */
     frameguard: { action: 'deny' },
-
-    /**
-     * `strict-origin-when-cross-origin`, bukan bawaan `no-referrer`.
-     *
-     * Nilai ini mengirim origin penuh untuk navigasi sesama-origin, dan hanya
-     * origin saja untuk lintas-origin — tidak pernah path, tidak pernah query.
-     * Untuk API, path dan query justru bagian yang berbahaya: di sistem lain
-     * keduanya kerap memuat id dokumen, dan di sistem ini pun §7.18 menuntut
-     * "tidak ada data sensitif di URL" justru supaya kebocoran lewat `Referer`
-     * tidak berakibat apa-apa.
-     */
     referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
-
-    /**
-     * ## CSP untuk API yang tidak pernah menyajikan HTML
-     *
-     * `default-src 'none'` adalah kebijakan paling ketat yang masih bermakna:
-     * tidak ada apa pun yang boleh dimuat. Ia bisa seketat itu justru karena
-     * API ini hanya mengembalikan JSON — tidak ada dokumen, tidak ada skrip,
-     * tidak ada gaya. Browser yang membuka endpoint ini menampilkan teks JSON
-     * apa adanya, dan CSP tidak menghalangi hal itu.
-     *
-     * ## Kenapa `useDefaults: false`
-     *
-     * Bawaan `helmet` memuat `style-src 'self' 'unsafe-inline'` dan
-     * `script-src 'self'`. Membiarkannya berarti mengirim `unsafe-inline` di
-     * header yang §7.18 minta **tanpa** `unsafe-inline` — dan itu bukan
-     * perbedaan kecil: `unsafe-inline` adalah bagian yang membuat CSP berhenti
-     * menahan serangan injeksi. Karena itu bawaannya dimatikan seluruhnya, dan
-     * yang tersisa hanyalah empat direktif di bawah.
-     *
-     * `form-action 'none'` dan `base-uri 'none'` tidak menutup apa pun yang
-     * belum ditutup `default-src 'none'` pada API ini. Keduanya tetap ditulis
-     * karena keduanya **tidak selalu** mengikuti `default-src`: sebagian
-     * browser memakai nilai bawaannya sendiri untuk kedua direktif itu, dan
-     * menuliskannya eksplisit menghapus ketergantungan pada perbedaan itu.
-     *
-     * ## Yang harus diubah saat Swagger dihidupkan
-     *
-     * `PRD-BACKEND.md` §11 merencanakan dokumentasi di `/api/v1/docs`. Halaman
-     * itu **HTML yang menjalankan skrip dan memuat gaya**, sehingga
-     * `default-src 'none'` akan membuatnya tampil kosong — tanpa error yang
-     * menyebut CSP sebagai sebabnya.
-     *
-     * Yang benar saat itu bukan melonggarkan kebijakan ini untuk seluruh API,
-     * melainkan memasang CSP tersendiri pada rute itu saja. Melonggarkan di
-     * sini berarti seluruh 48 operasi ikut kehilangan kebijakan yang ketat demi
-     * satu halaman yang tidak mengembalikan data.
-     */
     contentSecurityPolicy: {
       useDefaults: false,
       directives: {
@@ -140,4 +61,41 @@ export function securityHeaders(nodeEnv: string) {
       },
     },
   });
+
+  /**
+   * Helmet khusus untuk Swagger UI (`/api/v1/docs`):
+   * Swagger UI adalah aplikasi web SPA statis yang membutuhkan pemuatan skrip,
+   * stylesheet CSS, inline styling, favicon, dan SVG.
+   *
+   * Sesuai catatan PRD-BACKEND.md §11, CSP dilonggarkan HANYA untuk rute dokumentasi
+   * ini tanpa mengorbankan keamanan 48 endpoint API lainnya.
+   */
+  const docsHelmet = helmet({
+    strictTransportSecurity,
+    frameguard: { action: 'deny' },
+    referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+    contentSecurityPolicy: {
+      useDefaults: false,
+      directives: {
+        'default-src': ["'self'"],
+        'script-src': ["'self'", "'unsafe-inline'"],
+        'style-src': ["'self'", "'unsafe-inline'"],
+        'img-src': ["'self'", 'data:'],
+        'connect-src': ["'self'"],
+        'font-src': ["'self'", 'data:'],
+        'frame-ancestors': ["'none'"],
+        'base-uri': ["'none'"],
+        'form-action': ["'none'"],
+      },
+    },
+  });
+
+  return (req: Request, res: Response, next: NextFunction) => {
+    const url = req.originalUrl || req.url || '';
+    if (url.includes('/docs')) {
+      return docsHelmet(req, res, next);
+    }
+    return apiHelmet(req, res, next);
+  };
 }
+

@@ -58,7 +58,7 @@ import {
 } from './schema/work';
 
 /**
- * Seeder database operasional dan pengembangan lengkap.
+ * Seeder datowner@samudrakarsa.testabase operasional dan pengembangan lengkap.
  *
  * Mengisi struktur organisasi, akun uji peran lengkap, serta seluruh data domain
  * operasional sesuai alur dan tata kelola di ALUR-BACKEND-UNTUK-FE.md.
