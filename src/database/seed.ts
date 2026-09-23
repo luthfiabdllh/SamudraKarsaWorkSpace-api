@@ -144,8 +144,11 @@ const ACCOUNTS = [
     roles: ['owner'],
     status: 'active',
     divisionCode: null,
+    clusterCode: 'saintek',
+    subunitCode: 'kaiwatu',
     teamRole: 'Ketua Pelaksana',
-    isKormasit: true,
+    isKormasit: false,
+    isKormater: false,
     mustChangePassword: false,
   },
   {
@@ -155,8 +158,11 @@ const ACCOUNTS = [
     roles: ['co_owner'],
     status: 'active',
     divisionCode: null,
+    clusterCode: 'soshum',
+    subunitCode: 'werwaru',
     teamRole: 'Wakil Ketua Pelaksana',
-    isKormasit: true,
+    isKormasit: false,
+    isKormater: false,
     mustChangePassword: false,
   },
   {
@@ -166,8 +172,11 @@ const ACCOUNTS = [
     roles: ['division_head'],
     status: 'active',
     divisionCode: 'sekbend',
+    clusterCode: 'soshum',
+    subunitCode: 'kaiwatu',
     teamRole: 'Kadiv Sekretaris & Bendahara',
     isKormasit: false,
+    isKormater: false,
     mustChangePassword: false,
   },
   {
@@ -177,8 +186,11 @@ const ACCOUNTS = [
     roles: ['division_head'],
     status: 'active',
     divisionCode: 'medkre',
+    clusterCode: 'saintek',
+    subunitCode: 'kaiwatu',
     teamRole: 'Kadiv Media Kreatif',
     isKormasit: false,
+    isKormater: true,
     mustChangePassword: false,
   },
   {
@@ -188,8 +200,11 @@ const ACCOUNTS = [
     roles: ['division_deputy'],
     status: 'active',
     divisionCode: 'medkre',
+    clusterCode: 'soshum',
+    subunitCode: 'werwaru',
     teamRole: 'Wakadiv Media Kreatif',
-    isKormasit: false,
+    isKormasit: true,
+    isKormater: false,
     mustChangePassword: false,
   },
   {
@@ -199,8 +214,11 @@ const ACCOUNTS = [
     roles: ['member'],
     status: 'active',
     divisionCode: 'medkre',
+    clusterCode: 'saintek',
+    subunitCode: 'kaiwatu',
     teamRole: 'Staf Desain Grafis',
-    isKormasit: false,
+    isKormasit: true,
+    isKormater: false,
     mustChangePassword: false,
   },
   {
@@ -210,8 +228,11 @@ const ACCOUNTS = [
     roles: ['member'],
     status: 'active',
     divisionCode: 'medkre',
+    clusterCode: 'saintek',
+    subunitCode: 'kaiwatu',
     teamRole: 'Staf Kreatif Baru',
     isKormasit: false,
+    isKormater: false,
     mustChangePassword: true,
   },
   {
@@ -221,8 +242,11 @@ const ACCOUNTS = [
     roles: ['division_head'],
     status: 'active',
     divisionCode: 'humpub',
+    clusterCode: 'soshum',
+    subunitCode: 'werwaru',
     teamRole: 'Kadiv Humas & Publikasi',
     isKormasit: false,
+    isKormater: true,
     mustChangePassword: false,
   },
   {
@@ -232,8 +256,11 @@ const ACCOUNTS = [
     roles: ['member'],
     status: 'active',
     divisionCode: 'humpub',
+    clusterCode: 'agro',
+    subunitCode: 'werwaru',
     teamRole: 'Staf Media Sosial',
     isKormasit: false,
+    isKormater: true,
     mustChangePassword: false,
   },
   {
@@ -243,8 +270,11 @@ const ACCOUNTS = [
     roles: ['division_head'],
     status: 'active',
     divisionCode: 'ops',
+    clusterCode: 'medika',
+    subunitCode: 'werwaru',
     teamRole: 'Kadiv Operasional & Logistik',
     isKormasit: false,
+    isKormater: true,
     mustChangePassword: false,
   },
   {
@@ -254,8 +284,11 @@ const ACCOUNTS = [
     roles: ['member'],
     status: 'active',
     divisionCode: 'ops',
+    clusterCode: 'lintas',
+    subunitCode: 'werwaru',
     teamRole: 'Staf Logistik Posko',
     isKormasit: false,
+    isKormater: true,
     mustChangePassword: false,
   },
   {
@@ -265,8 +298,11 @@ const ACCOUNTS = [
     roles: ['division_head'],
     status: 'active',
     divisionCode: 'sponsor',
+    clusterCode: 'soshum',
+    subunitCode: 'kaiwatu',
     teamRole: 'Kadiv Sponsorship',
     isKormasit: false,
+    isKormater: false,
     mustChangePassword: false,
   },
   {
@@ -276,8 +312,11 @@ const ACCOUNTS = [
     roles: ['division_head'],
     status: 'active',
     divisionCode: 'psdm',
+    clusterCode: 'agro',
+    subunitCode: 'kaiwatu',
     teamRole: 'Kadiv PSDM & Internal',
     isKormasit: false,
+    isKormater: false,
     mustChangePassword: false,
   },
   {
@@ -287,8 +326,11 @@ const ACCOUNTS = [
     roles: ['member'],
     status: 'inactive',
     divisionCode: 'ops',
+    clusterCode: 'saintek',
+    subunitCode: 'kaiwatu',
     teamRole: null,
     isKormasit: false,
+    isKormater: false,
     mustChangePassword: false,
   },
 ] as const;
@@ -397,6 +439,12 @@ async function main(): Promise<void> {
         const divisionId = account.divisionCode
           ? (divisionIdByCode.get(account.divisionCode) ?? null)
           : null;
+        const clusterId = account.clusterCode
+          ? (clusterIdByCode.get(account.clusterCode) ?? null)
+          : null;
+        const subunitId = account.subunitCode
+          ? (subunitIdByCode.get(account.subunitCode) ?? null)
+          : null;
 
         await tx
           .insert(profiles)
@@ -408,8 +456,11 @@ async function main(): Promise<void> {
             roles: [...account.roles],
             status: account.status,
             divisionId,
+            clusterId,
+            subunitId,
             teamRole: account.teamRole,
             isKormasit: account.isKormasit,
+            isKormater: account.isKormater,
             mustChangePassword: account.mustChangePassword,
           })
           .onConflictDoNothing({ target: profiles.email });

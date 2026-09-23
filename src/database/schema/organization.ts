@@ -207,6 +207,7 @@ export const profiles = pgTable(
     /** Sebutan jabatan resmi — tidak diterjemahkan (keputusan 47). */
     teamRole: text('team_role'),
     isKormasit: boolean('is_kormasit').notNull().default(false),
+    isKormater: boolean('is_kormater').notNull().default(false),
 
     // ── Profil diri ──────────────────────────────────────────────────────
 

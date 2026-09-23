@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
-import { and, asc, eq, ilike, or, sql } from 'drizzle-orm';
+import { and, asc, eq, ilike, ne, or, sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import { AuditService } from '../audit/audit.service';
@@ -213,24 +213,43 @@ export class ProfilesService {
 
     await this.assertEmailFree(email);
 
-    const rows = await this.db
-      .insert(profiles)
-      .values({
-        email,
-        fullName: dto.fullName,
-        nickname: dto.nickname ?? null,
-        phone: dto.phone ?? null,
-        roles: dto.roles,
-        status: dto.status,
-        divisionId: dto.divisionId ?? null,
-        clusterId: dto.clusterId ?? null,
-        subunitId: dto.subunitId ?? null,
-        teamRole: dto.teamRole ?? null,
-        isKormasit: dto.isKormasit,
-      })
-      .returning(this.fullSelection());
+    const created = await this.db.transaction(async (tx) => {
+      // Pergantian ketua klaster jika isKormater true
+      if (dto.isKormater && dto.clusterId) {
+        await tx
+          .update(profiles)
+          .set({ isKormater: false })
+          .where(eq(profiles.clusterId, dto.clusterId));
+      }
 
-    const created = this.mustUpdated(rows[0]);
+      // Pergantian ketua subunit jika isKormasit true
+      if (dto.isKormasit && dto.subunitId) {
+        await tx
+          .update(profiles)
+          .set({ isKormasit: false })
+          .where(eq(profiles.subunitId, dto.subunitId));
+      }
+
+      const rows = await tx
+        .insert(profiles)
+        .values({
+          email,
+          fullName: dto.fullName,
+          nickname: dto.nickname ?? null,
+          phone: dto.phone ?? null,
+          roles: dto.roles,
+          status: dto.status,
+          divisionId: dto.divisionId ?? null,
+          clusterId: dto.clusterId ?? null,
+          subunitId: dto.subunitId ?? null,
+          teamRole: dto.teamRole ?? null,
+          isKormasit: dto.isKormasit,
+          isKormater: dto.isKormater,
+        })
+        .returning(this.fullSelection());
+
+      return this.mustUpdated(rows[0]);
+    });
 
     await this.record(context, PROFILE_ACTIONS.created, created.id, {
       afterData: created,
@@ -279,6 +298,25 @@ export class ProfilesService {
      * perubahannya benar-benar tersimpan. Lihat catatan di bawah.
      */
     const { after, released } = await this.db.transaction(async (tx) => {
+      const targetClusterId = dto.clusterId !== undefined ? dto.clusterId : before.clusterId;
+      const targetSubunitId = dto.subunitId !== undefined ? dto.subunitId : before.subunitId;
+
+      // Pergantian ketua klaster jika isKormater true
+      if (dto.isKormater && targetClusterId) {
+        await tx
+          .update(profiles)
+          .set({ isKormater: false })
+          .where(and(eq(profiles.clusterId, targetClusterId), ne(profiles.id, id)));
+      }
+
+      // Pergantian ketua subunit jika isKormasit true
+      if (dto.isKormasit && targetSubunitId) {
+        await tx
+          .update(profiles)
+          .set({ isKormasit: false })
+          .where(and(eq(profiles.subunitId, targetSubunitId), ne(profiles.id, id)));
+      }
+
       const rows = await tx
         .update(profiles)
         .set({
@@ -298,6 +336,7 @@ export class ProfilesService {
           ...(dto.subunitId !== undefined && { subunitId: dto.subunitId }),
           ...(dto.teamRole !== undefined && { teamRole: dto.teamRole }),
           ...(dto.isKormasit !== undefined && { isKormasit: dto.isKormasit }),
+          ...(dto.isKormater !== undefined && { isKormater: dto.isKormater }),
           ...(dto.mustChangePassword !== undefined && {
             mustChangePassword: dto.mustChangePassword,
           }),
@@ -470,6 +509,7 @@ export class ProfilesService {
       subunitId: profiles.subunitId,
       teamRole: profiles.teamRole,
       isKormasit: profiles.isKormasit,
+      isKormater: profiles.isKormater,
       version: profiles.version,
     };
   }
@@ -500,6 +540,7 @@ export class ProfilesService {
       subunitId: profiles.subunitId,
       teamRole: profiles.teamRole,
       isKormasit: profiles.isKormasit,
+      isKormater: profiles.isKormater,
       socialLinks: profiles.socialLinks,
       skills: profiles.skills,
       hobbies: profiles.hobbies,
@@ -526,6 +567,12 @@ export class ProfilesService {
         : undefined,
       dto.subunitId !== undefined
         ? eq(profiles.subunitId, dto.subunitId)
+        : undefined,
+      dto.isKormasit !== undefined
+        ? eq(profiles.isKormasit, dto.isKormasit)
+        : undefined,
+      dto.isKormater !== undefined
+        ? eq(profiles.isKormater, dto.isKormater)
         : undefined,
       dto.status !== undefined ? eq(profiles.status, dto.status) : undefined,
       // `= any(kolom)` alih-alih `@> ARRAY[...]`: tidak ada cast tipe enum yang

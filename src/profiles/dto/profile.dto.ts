@@ -176,6 +176,7 @@ export const CreateProfileSchema = z.object({
   subunitId: z.uuid('Subunit tidak sah.').nullish(),
   teamRole: teksOpsional(120),
   isKormasit: z.boolean().default(false),
+  isKormater: z.boolean().default(false),
 });
 
 @ZodDto(CreateProfileSchema)
@@ -191,6 +192,7 @@ export class CreateProfileDto {
   declare subunitId?: string | null;
   declare teamRole?: string | null;
   declare isKormasit: boolean;
+  declare isKormater: boolean;
 }
 
 /**
@@ -220,6 +222,7 @@ export const UpdateProfileSchema = z.object({
   subunitId: z.uuid('Subunit tidak sah.').nullish(),
   teamRole: teksOpsional(120),
   isKormasit: z.boolean().optional(),
+  isKormater: z.boolean().optional(),
   mustChangePassword: z.boolean().optional(),
 });
 
@@ -239,6 +242,7 @@ export class UpdateProfileDto {
   declare subunitId?: string | null;
   declare teamRole?: string | null;
   declare isKormasit?: boolean;
+  declare isKormater?: boolean;
   declare mustChangePassword?: boolean;
 }
 
@@ -260,6 +264,8 @@ export const ListProfilesSchema = z.object({
   subunitId: z.uuid('Subunit tidak sah.').optional(),
   status: z.enum(['invited', 'active', 'inactive']).optional(),
   role: z.enum(ROLES).optional(),
+  isKormasit: z.coerce.boolean().optional(),
+  isKormater: z.coerce.boolean().optional(),
   q: z.string().trim().min(1).max(80).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(100),
 });
@@ -271,6 +277,8 @@ export class ListProfilesDto {
   declare subunitId?: string;
   declare status?: 'invited' | 'active' | 'inactive';
   declare role?: (typeof ROLES)[number];
+  declare isKormasit?: boolean;
+  declare isKormater?: boolean;
   declare q?: string;
   declare limit: number;
 }
