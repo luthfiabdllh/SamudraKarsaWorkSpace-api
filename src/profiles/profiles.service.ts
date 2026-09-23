@@ -236,15 +236,25 @@ export class ProfilesService {
           email,
           fullName: dto.fullName,
           nickname: dto.nickname ?? null,
+          photoUrl: dto.photoUrl ?? null,
           phone: dto.phone ?? null,
+          facultyMajor: dto.facultyMajor ?? null,
+          batchYear: dto.batchYear ?? null,
           roles: dto.roles,
-          status: dto.status,
+          status: dto.status ?? 'active',
           divisionId: dto.divisionId ?? null,
           clusterId: dto.clusterId ?? null,
           subunitId: dto.subunitId ?? null,
           teamRole: dto.teamRole ?? null,
-          isKormasit: dto.isKormasit,
-          isKormater: dto.isKormater,
+          isKormasit: dto.isKormasit ?? false,
+          isKormater: dto.isKormater ?? false,
+          mustChangePassword: dto.mustChangePassword ?? false,
+          socialLinks: dto.socialLinks ?? {},
+          skills: dto.skills ?? [],
+          hobbies: dto.hobbies ?? [],
+          availabilityNote: dto.availabilityNote ?? null,
+          emergencyContactName: dto.emergencyContactName ?? null,
+          emergencyContactPhone: dto.emergencyContactPhone ?? null,
         })
         .returning(this.fullSelection());
 
@@ -339,6 +349,20 @@ export class ProfilesService {
           ...(dto.isKormater !== undefined && { isKormater: dto.isKormater }),
           ...(dto.mustChangePassword !== undefined && {
             mustChangePassword: dto.mustChangePassword,
+          }),
+          ...(dto.socialLinks !== undefined && {
+            socialLinks: dto.socialLinks ?? {},
+          }),
+          ...(dto.skills !== undefined && { skills: dto.skills ?? [] }),
+          ...(dto.hobbies !== undefined && { hobbies: dto.hobbies ?? [] }),
+          ...(dto.availabilityNote !== undefined && {
+            availabilityNote: dto.availabilityNote,
+          }),
+          ...(dto.emergencyContactName !== undefined && {
+            emergencyContactName: dto.emergencyContactName,
+          }),
+          ...(dto.emergencyContactPhone !== undefined && {
+            emergencyContactPhone: dto.emergencyContactPhone,
           }),
           version: sql`${profiles.version} + 1`,
           updatedAt: new Date(),
@@ -502,6 +526,8 @@ export class ProfilesService {
       fullName: profiles.fullName,
       nickname: profiles.nickname,
       photoUrl: profiles.photoUrl,
+      facultyMajor: profiles.facultyMajor,
+      batchYear: profiles.batchYear,
       roles: profiles.roles,
       status: profiles.status,
       divisionId: profiles.divisionId,
@@ -510,7 +536,13 @@ export class ProfilesService {
       teamRole: profiles.teamRole,
       isKormasit: profiles.isKormasit,
       isKormater: profiles.isKormater,
+      socialLinks: profiles.socialLinks,
+      skills: profiles.skills,
+      hobbies: profiles.hobbies,
+      availabilityNote: profiles.availabilityNote,
       version: profiles.version,
+      createdAt: profiles.createdAt,
+      updatedAt: profiles.updatedAt,
     };
   }
 

@@ -165,18 +165,28 @@ export const CreateProfileSchema = z.object({
   email: z.email('Email tidak sah.').transform(normalizeEmail),
   fullName: nama(160),
   nickname: teksOpsional(60),
+  photoUrl: z.url('Foto harus berupa URL yang sah.').max(500).nullish(),
   phone: telepon.nullish(),
+  facultyMajor: teksOpsional(160),
+  batchYear: teksOpsional(12),
   roles: z
     .array(z.enum(ROLES))
     .min(1, 'Minimal satu peran.')
     .default(['member']),
-  status: z.enum(['invited', 'active', 'inactive']).default('invited'),
+  status: z.enum(['invited', 'active', 'inactive']).default('active'),
   divisionId: z.uuid('Divisi tidak sah.').nullish(),
   clusterId: z.uuid('Cluster tidak sah.').nullish(),
   subunitId: z.uuid('Subunit tidak sah.').nullish(),
   teamRole: teksOpsional(120),
   isKormasit: z.boolean().default(false),
   isKormater: z.boolean().default(false),
+  mustChangePassword: z.boolean().default(false),
+  socialLinks: socialLinks.default({}),
+  skills: daftarTeks(30, 60).default([]),
+  hobbies: daftarTeks(30, 60).default([]),
+  availabilityNote: teksOpsional(500),
+  emergencyContactName: teksOpsional(160),
+  emergencyContactPhone: telepon.nullish(),
 });
 
 @ZodDto(CreateProfileSchema)
@@ -184,7 +194,10 @@ export class CreateProfileDto {
   declare email: string;
   declare fullName: string;
   declare nickname?: string | null;
+  declare photoUrl?: string | null;
   declare phone?: string | null;
+  declare facultyMajor?: string | null;
+  declare batchYear?: string | null;
   declare roles: (typeof ROLES)[number][];
   declare status: 'invited' | 'active' | 'inactive';
   declare divisionId?: string | null;
@@ -193,6 +206,13 @@ export class CreateProfileDto {
   declare teamRole?: string | null;
   declare isKormasit: boolean;
   declare isKormater: boolean;
+  declare mustChangePassword: boolean;
+  declare socialLinks?: Record<string, string | null | undefined> | null;
+  declare skills?: string[] | null;
+  declare hobbies?: string[] | null;
+  declare availabilityNote?: string | null;
+  declare emergencyContactName?: string | null;
+  declare emergencyContactPhone?: string | null;
 }
 
 /**
@@ -224,6 +244,12 @@ export const UpdateProfileSchema = z.object({
   isKormasit: z.boolean().optional(),
   isKormater: z.boolean().optional(),
   mustChangePassword: z.boolean().optional(),
+  socialLinks: socialLinks.optional(),
+  skills: daftarTeks(30, 60).optional(),
+  hobbies: daftarTeks(30, 60).optional(),
+  availabilityNote: teksOpsional(500),
+  emergencyContactName: teksOpsional(160),
+  emergencyContactPhone: telepon.nullish(),
 });
 
 @ZodDto(UpdateProfileSchema)
@@ -244,6 +270,12 @@ export class UpdateProfileDto {
   declare isKormasit?: boolean;
   declare isKormater?: boolean;
   declare mustChangePassword?: boolean;
+  declare socialLinks?: Record<string, string | null | undefined> | null;
+  declare skills?: string[] | null;
+  declare hobbies?: string[] | null;
+  declare availabilityNote?: string | null;
+  declare emergencyContactName?: string | null;
+  declare emergencyContactPhone?: string | null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
