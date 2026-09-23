@@ -5,7 +5,7 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { and, desc, eq, ilike, isNull, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, ilike, isNull, or, sql, type SQL } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import { AuditService } from '../audit/audit.service';
@@ -25,6 +25,7 @@ import {
   canChangePic,
   canDeleteWorkItem,
   canEditWorkItem,
+  isOwnerOrCoOwner,
   type Actor,
   type PolicyResult,
 } from '../policy/resource';
@@ -40,6 +41,7 @@ import {
   WORK_ITEM_ERRORS,
 } from './work-items.constants';
 import type {
+  CreateStoryWithTasksDto,
   CreateWorkItemDto,
   ListWorkItemsDto,
   SetWorkItemPicDto,
@@ -128,8 +130,18 @@ export class WorkItemsService {
    * kalau diminta. Keduanya mekanisme yang berbeda dan §14.2 memisahkannya
    * dengan tegas.
    */
-  async list(query: ListWorkItemsDto) {
+  async list(query: ListWorkItemsDto, actor?: Actor) {
     const conditions = this.listConditions(query);
+
+    // Scoped RBAC: jika aktor bukan owner/co_owner, wajib batasi hanya divisi miliknya
+    if (actor && !isOwnerOrCoOwner(actor)) {
+      if (actor.divisionId) {
+        conditions.push(eq(workItems.divisionId, actor.divisionId));
+      } else {
+        // Anggota tanpa divisi tidak dapat melihat task divisi manapun
+        conditions.push(sql`1 = 0`);
+      }
+    }
 
     const rows = await this.db
       .select(this.listSelection())
@@ -142,6 +154,38 @@ export class WorkItemsService {
       .offset(query.offset);
 
     return rows;
+  }
+
+  /**
+   * Mengambil daftar Story dan Task yang terikat pada suatu Permintaan (Request).
+   */
+  async listByRequest(requestId: string) {
+    const items = await this.db
+      .select({
+        ...this.listSelection(),
+        parentTitle: sql<string | null>`(SELECT p.title FROM work_items p WHERE p.id = ${workItems.parentId})`,
+      })
+      .from(workItems)
+      .leftJoin(divisions, eq(workItems.divisionId, divisions.id))
+      .leftJoin(profiles, eq(workItems.primaryPicId, profiles.id))
+      .where(
+        and(
+          eq(workItems.sourceRequestId, requestId),
+          isNull(workItems.deletedAt),
+        ),
+      )
+      .orderBy(asc(workItems.createdAt));
+
+    const stories = items.filter((item) => item.type === 'story');
+    const tasks = items.filter((item) => item.type === 'task');
+
+    return {
+      stories: stories.map((story) => ({
+        ...story,
+        tasks: tasks.filter((task) => task.parentId === story.id),
+      })),
+      orphanTasks: tasks.filter((task) => !task.parentId),
+    };
   }
 
   /**
@@ -219,6 +263,82 @@ export class WorkItemsService {
   }
 
   /**
+   * Membuat Story beserta Task-task di bawahnya dalam satu transaksi.
+   */
+  async createStoryWithTasks(
+    dto: CreateStoryWithTasksDto,
+    actor: Actor,
+    context: WriteContext,
+  ) {
+    const result = await this.db.transaction(async (tx) => {
+      // 1. Buat parent story
+      const storyDto: CreateWorkItemWithinDto = {
+        title: dto.title,
+        type: 'story',
+        description: dto.description ?? null,
+        primaryPicId: dto.primaryPicId ?? null,
+        divisionId: dto.divisionId ?? actor.divisionId ?? null,
+        clusterId: dto.clusterId ?? null,
+        subunitId: dto.subunitId ?? null,
+        priority: dto.priority ?? 'medium',
+        sourceRequestId: dto.sourceRequestId ?? null,
+        startDate: dto.startDate ?? null,
+        dueDate: dto.dueDate ?? null,
+        progressPercentage: 0,
+        isRecurring: false,
+        storyPoints: 0,
+        assigneeIds: dto.assigneeIds ?? [],
+      };
+
+      const story = await this.createWithin(tx, storyDto, context);
+
+      // 2. Buat child tasks di bawah story
+      const createdTasks = [];
+      for (const taskItem of dto.tasks) {
+        const taskDto: CreateWorkItemWithinDto = {
+          title: taskItem.title,
+          type: 'task',
+          description: taskItem.description ?? null,
+          primaryPicId: taskItem.primaryPicId ?? null,
+          divisionId: story.divisionId,
+          clusterId: story.clusterId,
+          subunitId: story.subunitId,
+          priority: taskItem.priority ?? story.priority ?? 'medium',
+          sourceRequestId: dto.sourceRequestId ?? null,
+          parentId: story.id,
+          storyPoints: taskItem.storyPoints ?? 0,
+          startDate: taskItem.startDate ?? story.startDate ?? null,
+          dueDate: taskItem.dueDate ?? story.dueDate ?? null,
+          progressPercentage: 0,
+          isRecurring: false,
+          assigneeIds: taskItem.assigneeIds ?? [],
+        };
+        const task = await this.createWithin(tx, taskDto, context);
+        createdTasks.push(task);
+      }
+
+      await this.recalculateParentStoryPoints(tx, story.id);
+
+      const updatedStory = await tx
+        .select(this.detailSelection())
+        .from(workItems)
+        .where(eq(workItems.id, story.id))
+        .limit(1);
+
+      return {
+        story: updatedStory[0] ?? story,
+        tasks: createdTasks,
+      };
+    });
+
+    await this.record(context, WORK_ITEM_ACTIONS.created, result.story.id, {
+      afterData: result.story,
+    });
+
+    return result;
+  }
+
+  /**
    * Isi pembuatan pekerjaan, di dalam transaksi milik pemanggilnya.
    *
    * ## Kenapa dipisah, bukan sekadar `create` yang menerima `tx`
@@ -269,11 +389,13 @@ export class WorkItemsService {
         programId: dto.programId ?? null,
         periodId,
         priority: dto.priority,
-        status: 'draft',
+        status: 'backlog',
         moduleStatus: dto.moduleStatus ?? null,
         startDate: dto.startDate ?? null,
         dueDate: dto.dueDate ?? null,
         progressPercentage: dto.progressPercentage,
+        parentId: dto.parentId ?? null,
+        storyPoints: dto.storyPoints ?? 0,
         isRecurring: dto.isRecurring,
         recurrenceRule: dto.recurrenceRule ?? null,
 
@@ -293,6 +415,10 @@ export class WorkItemsService {
 
     const row = this.mustFound(inserted[0]);
 
+    if (row.parentId) {
+      await this.recalculateParentStoryPoints(tx, row.parentId);
+    }
+
     await this.replaceAssignees(tx, row.id, dto.assigneeIds ?? []);
 
     /**
@@ -306,7 +432,7 @@ export class WorkItemsService {
     await tx.insert(workItemStatusHistory).values({
       workItemId: row.id,
       fromStatus: null,
-      toStatus: 'draft',
+      toStatus: 'backlog',
       note: 'Pekerjaan dibuat',
       changedBy: context.actorId,
     });
@@ -374,6 +500,10 @@ export class WorkItemsService {
             completionSummary: dto.completionSummary,
           }),
           ...(dto.holdReason !== undefined && { holdReason: dto.holdReason }),
+          ...(dto.parentId !== undefined && { parentId: dto.parentId }),
+          ...(dto.storyPoints !== undefined && {
+            storyPoints: dto.storyPoints,
+          }),
           ...(dto.isRecurring !== undefined && {
             isRecurring: dto.isRecurring,
           }),
@@ -390,6 +520,13 @@ export class WorkItemsService {
         .returning(this.detailSelection());
 
       const row = this.mustUpdated(rows[0]);
+
+      if (before.parentId) {
+        await this.recalculateParentStoryPoints(tx, before.parentId);
+      }
+      if (row.parentId && row.parentId !== before.parentId) {
+        await this.recalculateParentStoryPoints(tx, row.parentId);
+      }
 
       if (dto.assigneeIds !== undefined) {
         await this.replaceAssignees(tx, id, dto.assigneeIds);
@@ -571,6 +708,76 @@ export class WorkItemsService {
 
       const row = this.mustUpdated(rows[0]);
 
+      // Roll-up ke Story jika semua child task berstatus done
+      if (row.parentId && dto.to === 'done') {
+        const siblings = await tx
+          .select({ id: workItems.id, status: workItems.status })
+          .from(workItems)
+          .where(
+            and(
+              eq(workItems.parentId, row.parentId),
+              isNull(workItems.deletedAt),
+            ),
+          );
+
+        const allDone = siblings.every((s) =>
+          s.id === row.id ? true : s.status === 'done',
+        );
+        if (allDone) {
+          await tx
+            .update(workItems)
+            .set({
+              status: 'done',
+              progressPercentage: 100,
+              completedAt: new Date(),
+              completionSummary: 'Semua sub-task selesai dikerjakan.',
+              updatedBy: context.actorId,
+              version: sql`${workItems.version} + 1`,
+              updatedAt: new Date(),
+            })
+            .where(eq(workItems.id, row.parentId));
+
+          await tx.insert(workItemStatusHistory).values({
+            workItemId: row.parentId,
+            fromStatus: null,
+            toStatus: 'done',
+            note: 'Otomatis selesai: seluruh task dalam story ini telah selesai.',
+            changedBy: context.actorId,
+          });
+        }
+      } else if (
+        row.parentId &&
+        before.status === 'done' &&
+        dto.to !== 'done'
+      ) {
+        const [parent] = await tx
+          .select({ status: workItems.status })
+          .from(workItems)
+          .where(eq(workItems.id, row.parentId));
+
+        if (parent && parent.status === 'done') {
+          await tx
+            .update(workItems)
+            .set({
+              status: 'in_progress',
+              completedAt: null,
+              progressPercentage: 50,
+              updatedBy: context.actorId,
+              version: sql`${workItems.version} + 1`,
+              updatedAt: new Date(),
+            })
+            .where(eq(workItems.id, row.parentId));
+
+          await tx.insert(workItemStatusHistory).values({
+            workItemId: row.parentId,
+            fromStatus: 'done',
+            toStatus: 'in_progress',
+            note: 'Otomatis dibuka kembali: salah satu task dalam story dibuka kembali.',
+            changedBy: context.actorId,
+          });
+        }
+      }
+
       await tx.insert(workItemStatusHistory).values({
         workItemId: id,
         fromStatus: before.status,
@@ -722,6 +929,10 @@ export class WorkItemsService {
 
       const row = this.mustUpdated(rows[0]);
 
+      if (before.parentId) {
+        await this.recalculateParentStoryPoints(tx, before.parentId);
+      }
+
       await this.saveVersion(tx, before, context.actorId);
 
       return row;
@@ -760,6 +971,9 @@ export class WorkItemsService {
       divisionName: divisions.name,
       primaryPicId: workItems.primaryPicId,
       primaryPicName: profiles.fullName,
+      parentId: workItems.parentId,
+      storyPoints: workItems.storyPoints,
+      sourceRequestId: workItems.sourceRequestId,
       startDate: workItems.startDate,
       dueDate: workItems.dueDate,
       progressPercentage: workItems.progressPercentage,
@@ -796,6 +1010,8 @@ export class WorkItemsService {
       priority: workItems.priority,
       status: workItems.status,
       moduleStatus: workItems.moduleStatus,
+      parentId: workItems.parentId,
+      storyPoints: workItems.storyPoints,
       startDate: workItems.startDate,
       dueDate: workItems.dueDate,
       progressPercentage: workItems.progressPercentage,
@@ -865,6 +1081,14 @@ export class WorkItemsService {
 
     if (query.picId) {
       conditions.push(eq(workItems.primaryPicId, query.picId));
+    }
+
+    if (query.parentId) {
+      conditions.push(eq(workItems.parentId, query.parentId));
+    }
+
+    if (query.sourceRequestId) {
+      conditions.push(eq(workItems.sourceRequestId, query.sourceRequestId));
     }
 
     // Daftar "pekerjaan menggantung" §5.2.8. Dibiarkan bisa digabung dengan
@@ -1271,5 +1495,32 @@ export class WorkItemsService {
         ipAddress: context.ipAddress,
       });
     }
+  }
+
+  private async recalculateParentStoryPoints(
+    tx: DbExecutor,
+    parentId: string,
+  ): Promise<void> {
+    const [result] = await tx
+      .select({
+        totalPoints: sql<number>`COALESCE(SUM(${workItems.storyPoints}), 0)`,
+      })
+      .from(workItems)
+      .where(
+        and(
+          eq(workItems.parentId, parentId),
+          isNull(workItems.deletedAt),
+        ),
+      );
+
+    const total = Number(result?.totalPoints ?? 0);
+
+    await tx
+      .update(workItems)
+      .set({
+        storyPoints: total,
+        updatedAt: new Date(),
+      })
+      .where(eq(workItems.id, parentId));
   }
 }

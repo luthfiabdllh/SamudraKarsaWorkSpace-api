@@ -126,6 +126,10 @@ export const CreateWorkItemSchema = z.object({
 
   progressPercentage: persentase.default(0),
 
+  parentId: z.uuid('Parent story tidak sah.').nullish(),
+  storyPoints: z.coerce.number().int().min(0, 'Story points tidak boleh negatif.').default(0),
+  sourceRequestId: z.uuid('Request asal tidak sah.').nullish(),
+
   isRecurring: z.boolean().default(false),
   recurrenceRule: teks(200).nullish(),
 });
@@ -147,6 +151,9 @@ export class CreateWorkItemDto {
   declare startDate?: string | null;
   declare dueDate?: string | null;
   declare progressPercentage: number;
+  declare parentId?: string | null;
+  declare storyPoints?: number;
+  declare sourceRequestId?: string | null;
   declare isRecurring: boolean;
   declare recurrenceRule?: string | null;
 }
@@ -208,6 +215,10 @@ export const UpdateWorkItemSchema = z.object({
 
   progressPercentage: persentase.optional(),
 
+  parentId: z.uuid('Parent story tidak sah.').nullish(),
+  storyPoints: z.coerce.number().int().min(0, 'Story points tidak boleh negatif.').optional(),
+  sourceRequestId: z.uuid('Request asal tidak sah.').nullish(),
+
   blockerReason: teks(2000).nullish(),
   assistanceNeeded: teks(2000).nullish(),
   completionSummary: teks(5000).nullish(),
@@ -234,6 +245,9 @@ export class UpdateWorkItemDto {
   declare startDate?: string | null;
   declare dueDate?: string | null;
   declare progressPercentage?: number;
+  declare parentId?: string | null;
+  declare storyPoints?: number;
+  declare sourceRequestId?: string | null;
   declare blockerReason?: string | null;
   declare assistanceNeeded?: string | null;
   declare completionSummary?: string | null;
@@ -371,6 +385,9 @@ export const ListWorkItemsSchema = z.object({
   priority: z.enum(priorityLevelEnum.enumValues).optional(),
 
   picId: z.uuid('PIC tidak sah.').optional(),
+  parentId: z.uuid('Parent story tidak sah.').optional(),
+  sourceRequestId: z.uuid('Request ID tidak sah.').optional(),
+
   /** Hanya pekerjaan yang belum punya PIC — lihat catatan di atas. */
   withoutPic: z.coerce.boolean().optional(),
 
@@ -399,9 +416,64 @@ export class ListWorkItemsDto {
   declare type?: (typeof workItemTypeEnum.enumValues)[number];
   declare priority?: (typeof priorityLevelEnum.enumValues)[number];
   declare picId?: string;
+  declare parentId?: string;
+  declare sourceRequestId?: string;
   declare withoutPic?: boolean;
   declare q?: string;
   declare includeArchived: boolean;
   declare limit: number;
   declare offset: number;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Story with Sub-tasks
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const SubTaskItemSchema = z.object({
+  title: judul,
+  description: teks(3000).nullish(),
+  primaryPicId: z.uuid('PIC tidak sah.').nullish(),
+  assigneeIds: z.array(z.uuid('Penerima tugas tidak sah.')).optional(),
+  priority: z.enum(priorityLevelEnum.enumValues).default('medium'),
+  startDate: tanggal.nullish(),
+  dueDate: tanggal.nullish(),
+  storyPoints: z.coerce.number().int().min(0, 'Story points tidak boleh negatif.').default(0),
+});
+
+export const CreateStoryWithTasksSchema = z.object({
+  title: judul,
+  description: teks(5000).nullish(),
+  divisionId: z.uuid('Divisi tidak sah.').nullish(),
+  clusterId: z.uuid('Cluster tidak sah.').nullish(),
+  subunitId: z.uuid('Subunit tidak sah.').nullish(),
+  programId: z.uuid('Program tidak sah.').nullish(),
+  periodId: z.uuid('Periode tidak sah.').nullish(),
+  priority: z.enum(priorityLevelEnum.enumValues).default('medium'),
+  primaryPicId: z.uuid('PIC tidak sah.').nullish(),
+  assigneeIds: z.array(z.uuid('Penerima tugas tidak sah.')).optional(),
+  startDate: tanggal.nullish(),
+  dueDate: tanggal.nullish(),
+  sourceRequestId: z.uuid('Request asal tidak sah.').nullish(),
+  storyPoints: z.coerce.number().int().min(0).default(0),
+  tasks: z.array(SubTaskItemSchema).default([]),
+});
+
+@ZodDto(CreateStoryWithTasksSchema)
+export class CreateStoryWithTasksDto {
+  declare title: string;
+  declare description?: string | null;
+  declare divisionId?: string | null;
+  declare clusterId?: string | null;
+  declare subunitId?: string | null;
+  declare programId?: string | null;
+  declare periodId?: string | null;
+  declare priority: (typeof priorityLevelEnum.enumValues)[number];
+  declare primaryPicId?: string | null;
+  declare assigneeIds?: string[];
+  declare startDate?: string | null;
+  declare dueDate?: string | null;
+  declare sourceRequestId?: string | null;
+  declare storyPoints: number;
+  declare tasks: z.infer<typeof SubTaskItemSchema>[];
+}
+

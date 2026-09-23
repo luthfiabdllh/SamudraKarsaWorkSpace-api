@@ -707,7 +707,7 @@ async function main(): Promise<void> {
             divisionId: divisionIdByCode.get('ops')!,
             periodId: activePeriod.id,
             priority: 'high',
-            status: 'on_hold',
+            status: 'blocked',
             progressPercentage: 30,
             holdReason: 'Menunggu pencairan dana sponsorship tahap pertama dari PT Bank Daerah.',
             blockerReason: 'Kas operasional belum mencukupi untuk pembelian unit genset 5000W baru.',
@@ -717,7 +717,7 @@ async function main(): Promise<void> {
           .returning(),
       );
 
-      // 4. Work Item Status need_review
+      // 4. Work Item Status in_review
       const wi4 = firstRow(
         await tx
           .insert(workItems)
@@ -730,7 +730,7 @@ async function main(): Promise<void> {
             divisionId: divisionIdByCode.get('sekbend')!,
             periodId: activePeriod.id,
             priority: 'urgent',
-            status: 'need_review',
+            status: 'in_review',
             progressPercentage: 90,
             dueDate: '2026-10-01',
             createdBy: sekbend.id,
@@ -752,14 +752,14 @@ async function main(): Promise<void> {
             divisionId: divisionIdByCode.get('ops')!,
             periodId: activePeriod.id,
             priority: 'medium',
-            status: 'submitted',
+            status: 'todo',
             progressPercentage: 0,
             createdBy: ops.id,
           })
           .returning(),
       );
 
-      // 6. Work Item Status draft
+      // 6. Work Item Status backlog
       const wi6 = firstRow(
         await tx
           .insert(workItems)
@@ -771,7 +771,7 @@ async function main(): Promise<void> {
             divisionId: divisionIdByCode.get('humpub')!,
             periodId: activePeriod.id,
             priority: 'low',
-            status: 'draft',
+            status: 'backlog',
             progressPercentage: 0,
             createdBy: gita.id,
           })
@@ -790,7 +790,7 @@ async function main(): Promise<void> {
             divisionId: divisionIdByCode.get('medkre')!,
             periodId: activePeriod.id,
             priority: 'low',
-            status: 'draft',
+            status: 'backlog',
             deletedAt: new Date('2026-09-18T14:30:00Z'),
             createdBy: medkre.id,
           })
@@ -1566,7 +1566,7 @@ async function main(): Promise<void> {
           divisionId: divisionIdByCode.get('ops')!,
           periodId: activePeriod.id,
           priority: 'urgent',
-          status: 'draft',
+          status: 'backlog',
           progressPercentage: 20,
           note: 'Pelepasan resmi oleh Rektor dan keberangkatan kapal Pelni.',
         },
@@ -1577,7 +1577,7 @@ async function main(): Promise<void> {
           picId: coowner.id,
           periodId: activePeriod.id,
           priority: 'high',
-          status: 'draft',
+          status: 'backlog',
           progressPercentage: 0,
           note: 'Fokus instalasi panel surya dan penyuluhan kesehatan posyandu.',
         },
@@ -1588,7 +1588,7 @@ async function main(): Promise<void> {
           picId: owner.id,
           periodId: activePeriod.id,
           priority: 'medium',
-          status: 'draft',
+          status: 'backlog',
           progressPercentage: 0,
           note: 'Pameran produk UMKM tenun dan serah terima aset pompa surya.',
         },

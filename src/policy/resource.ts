@@ -77,6 +77,7 @@ export interface Actor {
    * pemeriksaan keuangan di bawah benar.
    */
   readonly divisionCodes: readonly string[];
+  readonly divisionId?: string | null;
 }
 
 /**

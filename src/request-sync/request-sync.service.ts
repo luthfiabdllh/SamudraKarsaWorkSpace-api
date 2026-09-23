@@ -236,7 +236,7 @@ export class RequestSyncService {
         // Kolom yang ditegakkan `check` constraint saat statusnya tertentu.
         // Tanpa salinan ini, pemindahannya ditolak database sebagai `500` —
         // dan yang ditolak adalah perpindahan yang sah.
-        ...(target === 'on_hold' && {
+        ...(target === 'blocked' && {
           holdReason: work.holdReason,
         }),
         ...(target === 'done' && {
@@ -510,7 +510,7 @@ export class RequestSyncService {
       .update(workItems)
       .set({
         status: target,
-        ...(target === 'on_hold' && { holdReason: request.holdReason }),
+        ...(target === 'blocked' && { holdReason: request.holdReason }),
         ...(target === 'done' && {
           completionSummary: request.resultSummary,
           completedAt: now,

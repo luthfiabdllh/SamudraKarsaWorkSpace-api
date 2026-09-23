@@ -114,7 +114,12 @@ export const workItems = pgTable(
     }),
 
     priority: priorityLevelEnum('priority').notNull().default('medium'),
-    status: workStatusEnum('status').notNull().default('draft'),
+    status: workStatusEnum('status').notNull().default('backlog'),
+
+    parentId: uuid('parent_id').references((): AnyPgColumn => workItems.id, {
+      onDelete: 'cascade',
+    }),
+    storyPoints: integer('story_points').notNull().default(0),
 
     /**
      * Status tambahan milik modul pemakainya — teks bebas, bukan enum.
@@ -192,17 +197,22 @@ export const workItems = pgTable(
     index('work_items_pic_idx').on(t.primaryPicId),
     index('work_items_period_idx').on(t.periodId),
     index('work_items_source_request_idx').on(t.sourceRequestId),
+    index('work_items_parent_idx').on(t.parentId),
     check(
       'work_items_progress_range',
       sql`progress_percentage between 0 and 100`,
     ),
     check(
       'work_items_hold_reason_required',
-      sql`status <> 'on_hold' or (hold_reason is not null and hold_reason <> '')`,
+      sql`status <> 'blocked' or (hold_reason is not null and hold_reason <> '')`,
     ),
     check(
       'work_items_completion_summary_required',
       sql`status <> 'done' or (completion_summary is not null and completion_summary <> '')`,
+    ),
+    check(
+      'work_items_story_points_non_negative',
+      sql`story_points >= 0`,
     ),
   ],
 );
@@ -476,7 +486,7 @@ export const milestones = pgTable(
     }),
 
     priority: priorityLevelEnum('priority').notNull().default('medium'),
-    status: workStatusEnum('status').notNull().default('draft'),
+    status: workStatusEnum('status').notNull().default('backlog'),
     progressPercentage: integer('progress_percentage').notNull().default(0),
 
     note: text('note'),
@@ -524,6 +534,14 @@ export const workItemsRelations = relations(workItems, ({ one, many }) => ({
   sourceRequest: one(requests, {
     fields: [workItems.sourceRequestId],
     references: [requests.id],
+  }),
+  parent: one(workItems, {
+    fields: [workItems.parentId],
+    references: [workItems.id],
+    relationName: 'work_item_hierarchy',
+  }),
+  children: many(workItems, {
+    relationName: 'work_item_hierarchy',
   }),
   assignees: many(workItemAssignees),
   checklists: many(workItemChecklists),

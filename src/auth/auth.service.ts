@@ -54,6 +54,7 @@ export interface Actor {
    */
   readonly roles: readonly Role[];
   readonly divisionCodes: readonly string[];
+  readonly divisionId?: string | null;
   readonly mustChangePassword: boolean;
 }
 
@@ -89,6 +90,7 @@ const PROFILE_COLUMNS = {
   passwordHash: profiles.passwordHash,
   googleSub: profiles.googleSub,
   divisionCode: divisions.code,
+  divisionId: profiles.divisionId,
 } as const;
 
 /**
@@ -110,6 +112,7 @@ interface ProfileSnapshot {
   readonly passwordHash: string | null;
   readonly googleSub: string | null;
   readonly divisionCode: string | null;
+  readonly divisionId: string | null;
 }
 
 /**
@@ -584,6 +587,7 @@ export class AuthService {
       // Keuangan bukanlah wewenang atas keuangannya.
       divisionCodes:
         isDivisionLead && profile.divisionCode ? [profile.divisionCode] : [],
+      divisionId: profile.divisionId,
       mustChangePassword: profile.mustChangePassword,
     };
   }

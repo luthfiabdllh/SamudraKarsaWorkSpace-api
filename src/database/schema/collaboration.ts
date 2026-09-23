@@ -137,7 +137,7 @@ export const meetingDecisions = pgTable(
     dueDate: date('due_date'),
 
     priority: priorityLevelEnum('priority').notNull().default('medium'),
-    status: workStatusEnum('status').notNull().default('draft'),
+    status: workStatusEnum('status').notNull().default('backlog'),
 
     workItemId: uuid('work_item_id').references(() => workItems.id, {
       onDelete: 'set null',

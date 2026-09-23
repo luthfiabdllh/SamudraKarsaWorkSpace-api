@@ -18,6 +18,7 @@ import { clientIp } from '../common/http/request-context';
 import type { AuthenticatedUser } from '../common/types/express';
 import { Policy } from '../policy/policy.decorator';
 import {
+  CreateStoryWithTasksDto,
   CreateWorkItemDto,
   ListWorkItemsDto,
   SetWorkItemPicDto,
@@ -92,14 +93,36 @@ export class WorkItemsController {
 
   @Get()
   @Policy('work-item:read')
-  list(@Query() dto: ListWorkItemsDto) {
-    return this.workItems.list(dto);
+  list(@Query() dto: ListWorkItemsDto, @Req() request: Request) {
+    return this.workItems.list(dto, this.actor(request));
+  }
+
+  @Get('by-request/:requestId')
+  @Policy('work-item:read')
+  listByRequest(@Param('requestId') requestId: string) {
+    return this.workItems.listByRequest(requestId);
   }
 
   @Get(':id')
   @Policy('work-item:read')
   detail(@Param('id') id: string, @Req() request: Request) {
     return this.workItems.detail(id, this.actor(request));
+  }
+
+  /**
+   * Membuat Story beserta Task-task di bawahnya.
+   */
+  @Post('stories')
+  @Policy('work-item:create')
+  createStoryWithTasks(
+    @Body() dto: CreateStoryWithTasksDto,
+    @Req() request: Request,
+  ) {
+    return this.workItems.createStoryWithTasks(
+      dto,
+      this.actor(request),
+      this.context(request),
+    );
   }
 
   /**

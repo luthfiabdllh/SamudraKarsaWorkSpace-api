@@ -41,6 +41,7 @@ export interface AuthenticatedUser {
    * benar-benar dibedakan (keputusan 46).
    */
   readonly divisionCodes: readonly string[];
+  readonly divisionId?: string | null;
 
   /**
    * Keputusan 10 — kalau true, seluruh endpoint non-exempt ditolak backend

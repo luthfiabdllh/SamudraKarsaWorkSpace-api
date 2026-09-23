@@ -96,17 +96,17 @@ export const memberStatusEnum = pgEnum('member_status', [
  * dengan nilai yang tidak berasal dari isian siapa pun (temuan #14).
  */
 export const workStatusEnum = pgEnum('work_status', [
-  'draft',
-  'submitted',
-  'approved',
+  'backlog',
+  'todo',
   'in_progress',
-  'need_review',
-  'on_hold',
+  'in_review',
+  'blocked',
   'done',
-  'rejected',
+  'canceled',
 ]);
 
 export const workItemTypeEnum = pgEnum('work_item_type', [
+  'story',
   'task',
   'request',
   'meeting_follow_up',

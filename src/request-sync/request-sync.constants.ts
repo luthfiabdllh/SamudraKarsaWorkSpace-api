@@ -37,67 +37,32 @@ import type { RequestStatus, WorkStatus } from '../policy/resource';
  * **kedua tabel ini yang diubah lebih dulu**, bukan kode sinkronisasinya.
  */
 export const WORK_STATUS_FOR_REQUEST = {
-  draft: 'draft',
-  submitted: 'submitted',
-  accepted: 'approved',
+  draft: 'backlog',
+  submitted: 'backlog',
+  accepted: 'todo',
   in_progress: 'in_progress',
-  need_review: 'need_review',
-  on_hold: 'on_hold',
+  need_review: 'in_review',
+  on_hold: 'blocked',
   done: 'done',
-  rejected: 'rejected',
-
-  /**
-   * **Tidak** dipetakan ke `need_review`, dan itu inti perbaikannya.
-   *
-   * `sksks` melebur keduanya (`docs/INVENTARIS-ATURAN.md` §4, temuan #6), dan
-   * §5.2.5 menyebutnya sebagai kehilangan informasi: "kami butuh keterangan dari
-   * Anda" dan "kami sedang menilai hasil kerja Anda" adalah dua keadaan yang
-   * berlawanan arah. Meleburkannya membuat kepala divisi tidak bisa membedakan
-   * pekerjaan yang belum bisa dimulai dari pekerjaan yang sudah jadi.
-   *
-   * `on_hold` dipilih sebagai pasangannya karena itulah artinya bagi pekerjaan:
-   * **belum bisa dikerjakan**, ditahan oleh sesuatu di luar pekerjaan itu
-   * sendiri. Kolom `hold_reason`-nya diisi dari `clarification_note`
-   * permintaan — bukan dengan teks karangan seperti di `sksks`, yang mengisi
-   * `assistance_needed` dengan `'Menunggu tindak lanjut request'` hanya supaya
-   * validasinya lolos.
-   */
-  need_clarification: 'on_hold',
+  rejected: 'canceled',
+  need_clarification: 'blocked',
 } as const satisfies Record<RequestStatus, WorkStatus>;
 
 /**
  * Arah sebaliknya — dipakai saat **pekerjaannya** yang berpindah.
- *
- * `approved` menjadi `accepted`, bukan `approved`: nama statusnya berbeda di
- * kedua tabel (`sksks` menyebutnya `diterima` di sisi permintaan dan
- * `disetujui` di sisi pekerjaan — §5.2.5 baris pertama), dan yang disatukan di
- * sini adalah **artinya**, bukan tulisannya. Menyeragamkan namanya berarti
- * mengubah salah satu enum, dan enum `work_status` sudah dipakai pekerjaan yang
- * tidak berasal dari permintaan sama sekali.
  */
 export const REQUEST_STATUS_FOR_WORK = {
-  draft: 'draft',
-  submitted: 'submitted',
-  approved: 'accepted',
+  backlog: 'draft',
+  todo: 'accepted',
   in_progress: 'in_progress',
-  need_review: 'need_review',
-  on_hold: 'on_hold',
+  in_review: 'need_review',
+  blocked: 'on_hold',
   done: 'done',
-  rejected: 'rejected',
+  canceled: 'rejected',
 } as const satisfies Record<WorkStatus, RequestStatus>;
 
 /**
  * Kolom permintaan yang **wajib terisi** saat statusnya menjadi nilai tertentu.
- *
- * Ditulis ulang di sini meski `status_transitions.required_fields` sudah memuat
- * hal yang sama, dan itu **bukan** duplikasi: tabel itu menyatakan syarat sebuah
- * **perpindahan**, sedangkan yang dibutuhkan penyelesaian konflik adalah syarat
- * sebuah **keadaan**. Penyelesaian konflik boleh melompat — itulah gunanya —
- * sehingga tidak ada baris `status_transitions` yang bisa dibacanya.
- *
- * Ketiganya sejalan dengan `check` constraint di tabel `requests`. Yang
- * membedakan: constraint itu menolak sebagai `500` yang tidak menyebut kolom,
- * sedangkan peta ini menolak sebagai `422` yang menyebut kolomnya.
  */
 export const REQUEST_STATUS_REQUIRED_FIELDS: Partial<
   Record<RequestStatus, readonly string[]>
@@ -111,7 +76,7 @@ export const REQUEST_STATUS_REQUIRED_FIELDS: Partial<
 export const WORK_STATUS_REQUIRED_FIELDS: Partial<
   Record<WorkStatus, readonly string[]>
 > = {
-  on_hold: ['hold_reason'],
+  blocked: ['hold_reason'],
   done: ['completion_summary'],
 };
 

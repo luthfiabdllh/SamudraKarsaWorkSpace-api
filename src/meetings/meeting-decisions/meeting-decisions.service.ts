@@ -163,7 +163,7 @@ export class MeetingDecisionsService {
           primaryPicId: decision.picId,
           dueDate: decision.dueDate,
           priority: decision.priority,
-          status: 'draft', // Draft status
+          status: 'backlog', // Backlog status
           sourceMeetingDecisionId: decision.id,
           createdBy: actor.id,
         })
