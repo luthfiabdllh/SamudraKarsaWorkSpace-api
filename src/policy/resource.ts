@@ -326,6 +326,11 @@ export function canEditWorkItem(
     return allow();
   }
 
+  // Task dapat diedit oleh seluruh anggota
+  if (item.type === 'task') {
+    return allow();
+  }
+
   if (
     item.createdBy === actor.id ||
     item.primaryPicId === actor.id ||
@@ -368,17 +373,7 @@ export function canDeleteWorkItem(
  * |---|---|
  * | `owner`, `co_owner` | selalu |
  * | `division_head`, `division_deputy` | pada divisinya |
- * | `member` | **hanya** mengisi PIC pada `task` yang **belum punya PIC** |
- *
- * Baris terakhir adalah jalur "klaim pekerjaan tanpa PIC" (§9.3 M2). Ia sengaja
- * sesempit itu: begitu sebuah pekerjaan punya PIC, mengalihkannya adalah
- * keputusan, bukan inisiatif — dan yang memutuskan adalah kepala divisinya.
- *
- * Perhatikan bahwa `member` **tidak** dibatasi hanya boleh mengisi dirinya
- * sendiri. Itu dipertahankan dari `sksks`, yang membebaskan pengisian PIC pada
- * pekerjaan tanpa PIC untuk siapa saja: yang penting pekerjaannya ada yang
- * mengerjakan, dan menahan orang yang mau mencarikan pengganti hanya membuat
- * pekerjaannya menggantung.
+ * | `member` | mengisi / mengubah PIC pada `task` |
  */
 export function canChangePic(
   actor: Actor,
@@ -392,7 +387,8 @@ export function canChangePic(
     return allow();
   }
 
-  if (item.type === 'task' && item.primaryPicId === null) {
+  // PIC task dapat diatur / diubah oleh seluruh anggota
+  if (item.type === 'task') {
     return allow();
   }
 
