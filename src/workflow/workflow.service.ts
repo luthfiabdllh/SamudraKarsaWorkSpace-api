@@ -9,6 +9,7 @@ import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import type { Role } from '../common/types/roles';
 import { DRIZZLE } from '../database/database.constants';
 import { statusTransitions } from '../database/schema/system';
+import type { DbExecutor } from '../numbering/numbering.service';
 import {
   WORKFLOW_ERRORS,
   type TransitionEntityType,
@@ -76,8 +77,9 @@ export class WorkflowService {
     entityType: TransitionEntityType,
     from: string,
     roles: readonly Role[],
+    executor?: DbExecutor,
   ): Promise<TransitionEdge[]> {
-    const edges = await this.edgesFrom(entityType, from, roles);
+    const edges = await this.edgesFrom(entityType, from, roles, executor);
 
     return edges.map((edge) => ({
       to: edge.to,
@@ -96,8 +98,9 @@ export class WorkflowService {
     entityType: TransitionEntityType,
     from: string,
     roles: readonly Role[],
+    executor?: DbExecutor,
   ): Promise<string[]> {
-    const edges = await this.edgesFrom(entityType, from, roles);
+    const edges = await this.edgesFrom(entityType, from, roles, executor);
 
     return edges.map((edge) => edge.to);
   }
@@ -128,8 +131,9 @@ export class WorkflowService {
     to: string,
     roles: readonly Role[],
     values: Readonly<Record<string, unknown>>,
+    executor?: DbExecutor,
   ): Promise<TransitionEdge> {
-    const edges = await this.edgesFrom(entityType, from, roles);
+    const edges = await this.edgesFrom(entityType, from, roles, executor);
 
     // Dua kegagalan yang berbeda, dan dibedakan meski sama-sama 422.
     //
@@ -143,7 +147,7 @@ export class WorkflowService {
 
     if (!edge) {
       const allowed = edges.map((candidate) => candidate.to);
-      const exists = await this.edgeExists(entityType, from, to);
+      const exists = await this.edgeExists(entityType, from, to, executor);
 
       throw this.reject(
         exists
@@ -188,8 +192,10 @@ export class WorkflowService {
     entityType: TransitionEntityType,
     from: string,
     to: string,
+    executor?: DbExecutor,
   ): Promise<boolean> {
-    const found = await this.db
+    const db = (executor ?? this.db) as NodePgDatabase;
+    const found = await db
       .select({ id: statusTransitions.id })
       .from(statusTransitions)
       .where(
@@ -212,6 +218,7 @@ export class WorkflowService {
     entityType: TransitionEntityType,
     from: string,
     roles: readonly Role[],
+    executor?: DbExecutor,
   ): Promise<TransitionEdge[]> {
     // Peran kosong berarti tidak ada langkah yang tersedia — bukan semua
     // langkah. Sebuah token tanpa peran yang dikenali tidak boleh mendapat apa
@@ -221,7 +228,8 @@ export class WorkflowService {
       return [];
     }
 
-    const rows = await this.db
+    const db = (executor ?? this.db) as NodePgDatabase;
+    const rows = await db
       .select({
         to: statusTransitions.toStatus,
         allowedRoles: statusTransitions.allowedRoles,

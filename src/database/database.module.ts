@@ -34,7 +34,7 @@ import { DRIZZLE, PG_POOL } from './database.constants';
       useFactory: (config: ConfigService): Pool =>
         new Pool({
           connectionString: config.getOrThrow<string>('DATABASE_URL'),
-          max: 1,
+          max: Number(config.get('DATABASE_POOL_MAX') ?? 10),
           idleTimeoutMillis: 10_000,
           connectionTimeoutMillis: 5_000,
         }),

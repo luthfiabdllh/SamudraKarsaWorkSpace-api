@@ -213,6 +213,7 @@ export class RequestSyncService {
         TRANSITION_ENTITY.workItem,
         work.status,
         target,
+        tx,
       ))
     ) {
       return this.flagConflict(tx, {
@@ -328,6 +329,7 @@ export class RequestSyncService {
         TRANSITION_ENTITY.request,
         request.status,
         target,
+        tx,
       ))
     ) {
       return this.flagConflict(tx, {
